@@ -474,6 +474,11 @@ function App() {
                     Request Property Information
                   </h3>
 
+                  <p>
+                    WhatsApp will open with this property and your details.
+                    Review the message there and press Send.
+                  </p>
+
                   <input
                     type="text"
                     name="name"
@@ -504,9 +509,9 @@ function App() {
                     type="submit"
                     className="search-button"
                   >
-                    Send Request
+                    Send on WhatsApp
 
-                    <ArrowRight size={18} />
+                    <MessageCircle size={18} />
                   </button>
 
                 </form>
@@ -2221,8 +2226,8 @@ function App() {
                 </h3>
 
                 <p>
-                  Fill in your details and we'll
-                  contact you.
+                  Your details will open in WhatsApp. Review the message there
+                  and press Send to deliver it to RENTORA.
                 </p>
 
                 <input
@@ -2287,9 +2292,9 @@ function App() {
                   className="search-button"
                 >
 
-                  Submit Request
+                  Send on WhatsApp
 
-                  <ArrowRight size={18} />
+                  <MessageCircle size={18} />
 
                 </button>
 
