@@ -24,6 +24,8 @@ import {
 import "./App.css";
 import { projects, properties } from "./properties";
 import { googleMapsUrl, officeLocation } from "./contactDetails";
+import { articles } from "./articles";
+import ArticlePage from "./pages/ArticlePage";
 import Contact from "./pages/Contact";
 import AboutUs from "./pages/AboutUs";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -50,8 +52,14 @@ const agents = [
 const whatsappUrl = (message = "Hello RENTORA, I am interested in a property.") =>
   `https://wa.me/923187630194?text=${encodeURIComponent(message)}`;
 
+const articleSlugFromHash = () =>
+  window.location.hash.match(/^#article\/([^/]+)$/)?.[1] ?? null;
+
 const pageFromHash = () => {
   const page = window.location.hash.slice(1);
+  if (articles.some((article) => article.slug === articleSlugFromHash())) {
+    return "article";
+  }
   return ["about", "privacy", "terms", "contact"].includes(page) ? page : "home";
 };
 
@@ -69,6 +77,10 @@ function App() {
   const [submittedSearch, setSubmittedSearch] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(pageFromHash);
+
+  const [selectedArticle, setSelectedArticle] = useState(() =>
+    articles.find((article) => article.slug === articleSlugFromHash()) ?? null
+  );
 
   const [selectedProperty, setSelectedProperty] = useState(null);
 
@@ -111,16 +123,46 @@ function App() {
       window.history.pushState({ page }, "", hash);
     }
     setCurrentPage(page);
+    if (page !== "article") setSelectedArticle(null);
     closeMenu();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const openArticle = (article) => {
+    window.history.pushState(
+      { page: "article", slug: article.slug },
+      "",
+      `#article/${article.slug}`
+    );
+    setSelectedArticle(article);
+    setCurrentPage("article");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const navigateToArticles = () => {
+    window.history.pushState({ page: "home" }, "", "#blog");
+    setSelectedArticle(null);
+    setCurrentPage("home");
+    window.requestAnimationFrame(() => {
+      document.getElementById("blog")?.scrollIntoView({ behavior: "smooth" });
+    });
   };
 
   useEffect(() => {
     const syncPageWithHash = () => {
       const hash = window.location.hash.slice(1);
-      if (["about", "privacy", "terms", "contact"].includes(hash)) {
+      const article = articles.find(
+        (item) => item.slug === articleSlugFromHash()
+      );
+
+      if (article) {
+        setSelectedArticle(article);
+        setCurrentPage("article");
+      } else if (["about", "privacy", "terms", "contact"].includes(hash)) {
+        setSelectedArticle(null);
         setCurrentPage(hash);
-      } else if (!hash || hash === "home") {
+      } else if (!hash || hash === "home" || hash === "blog") {
+        setSelectedArticle(null);
         setCurrentPage("home");
       }
     };
@@ -183,6 +225,16 @@ function App() {
 
     window.open(whatsappUrl(message), "_blank", "noopener,noreferrer");
   };
+
+  if (currentPage === "article" && selectedArticle) {
+    return (
+      <ArticlePage
+        article={selectedArticle}
+        onNavigateHome={() => navigateToPage("home")}
+        onNavigateArticles={navigateToArticles}
+      />
+    );
+  }
 
   if (currentPage === "about") {
     return <AboutUs onNavigateHome={() => navigateToPage("home")} />;
@@ -1893,7 +1945,7 @@ function App() {
               </div>
 
               <a
-                href="#contact-section"
+                href="#blog"
                 className="view-all"
               >
                 View All Articles
@@ -1935,7 +1987,13 @@ function App() {
                     right rental property.
                   </p>
 
-                  <a href="#contact-section">
+                  <a
+                    href={`#article/${articles[0].slug}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openArticle(articles[0]);
+                    }}
+                  >
                     Read Article
                     <ArrowRight size={15} />
                   </a>
@@ -1975,7 +2033,13 @@ function App() {
                     residential locations.
                   </p>
 
-                  <a href="#contact-section">
+                  <a
+                    href={`#article/${articles[1].slug}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openArticle(articles[1]);
+                    }}
+                  >
                     Read Article
                     <ArrowRight size={15} />
                   </a>
@@ -2015,7 +2079,13 @@ function App() {
                     before making a property decision.
                   </p>
 
-                  <a href="#contact-section">
+                  <a
+                    href={`#article/${articles[2].slug}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openArticle(articles[2]);
+                    }}
+                  >
                     Read Article
                     <ArrowRight size={15} />
                   </a>
@@ -2053,7 +2123,13 @@ function App() {
                     Review location, condition and costs before making a purchase.
                   </p>
 
-                  <a href="#contact-section">
+                  <a
+                    href={`#article/${articles[3].slug}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openArticle(articles[3]);
+                    }}
+                  >
                     Read Article
                     <ArrowRight size={15} />
                   </a>
