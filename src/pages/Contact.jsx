@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mail, MapPin, MessageCircle, Send } from "lucide-react";
+import { Mail, MapPin, MessageCircle } from "lucide-react";
 import { googleMapsUrl, officeLocation } from "../contactDetails";
 import PageLayout from "./PageLayout";
 
@@ -134,7 +134,10 @@ function Contact({ onNavigateHome }) {
         <div className="contact-form-heading">
           <span className="section-label">PROPERTY ENQUIRY</span>
           <h2 id="contact-form-title">Send us a message</h2>
-          <p>Share a few details and we’ll help you with your enquiry.</p>
+          <p>
+            Your details will open in a WhatsApp message. Review it there and
+            press Send to deliver it to RENTORA.
+          </p>
         </div>
 
         <form className="contact-page-form" onSubmit={handleSubmit} noValidate>
@@ -207,8 +210,8 @@ function Contact({ onNavigateHome }) {
           </label>
 
           <button className="contact-submit-button" type="submit">
-            Send Message
-            <Send size={17} />
+            Send on WhatsApp
+            <MessageCircle size={17} />
           </button>
 
           {submitted && (
