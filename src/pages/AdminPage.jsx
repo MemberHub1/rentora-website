@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Edit3, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
 
 const emptyProperty = {
@@ -15,19 +15,58 @@ const emptyProperty = {
 
 function AdminPage({ properties, editingProperty, onEdit, onDelete, onSave, onBackHome }) {
   const [form, setForm] = useState(editingProperty || emptyProperty);
+  const [imageName, setImageName] = useState("");
+  const [imageError, setImageError] = useState("");
+  const imageInputRef = useRef(null);
   const isEditing = Boolean(editingProperty?.id);
 
   useEffect(() => {
     setForm(editingProperty || emptyProperty);
+    setImageName("");
+    setImageError("");
   }, [editingProperty]);
 
   const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setImageError("Please select a JPG, PNG or WEBP image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("Image must be 5 MB or smaller.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setImageError("This image could not be read. Please try another file.");
+        return;
+      }
+      update("image", reader.result);
+      setImageName(file.name);
+      setImageError("");
+    };
+    reader.onerror = () => setImageError("This image could not be read. Please try another file.");
+    reader.readAsDataURL(file);
+  };
+
   const submit = (event) => {
     event.preventDefault();
     if (!form.title.trim() || !form.location.trim() || !form.price.trim()) return;
+    if (!form.image) {
+      setImageError("Please upload a property image before publishing.");
+      return;
+    }
     onSave({
       ...form,
       id: form.id || `property-${Date.now()}`,
@@ -35,11 +74,13 @@ function AdminPage({ properties, editingProperty, onEdit, onDelete, onSave, onBa
       location: form.location.trim(),
       price: form.price.trim(),
       area: form.area.trim(),
-      image: form.image.trim() || "/assets/apartment-1.jpg",
+      image: form.image,
       beds: Number(form.beds) || 0,
       baths: Number(form.baths) || 0,
     });
     setForm(emptyProperty);
+    setImageName("");
+    setImageError("");
   };
 
   return (
@@ -93,8 +134,31 @@ function AdminPage({ properties, editingProperty, onEdit, onDelete, onSave, onBa
                   <label>Area<input value={form.area} onChange={(e) => update("area", e.target.value)} placeholder="1,250 sq ft" /></label>
                 </div>
                 <label>Price<input value={form.price} onChange={(e) => update("price", e.target.value)} placeholder="Rs. 85,000" required /></label>
-                <label>Property Image URL<input value={form.image} onChange={(e) => update("image", e.target.value)} placeholder="/assets/apartment-1.jpg or image URL" /></label>
-                {imagePreview && <div className="admin-image-preview"><img src={imagePreview} alt="Property preview" onError={(e) => { e.currentTarget.style.display = "none"; }} /><span><ImagePlus size={16} /> Image preview</span></div>}
+                <div className="admin-upload-field">
+                  <span className="admin-upload-label">Property Image</span>
+                  <input
+                    ref={imageInputRef}
+                    className="admin-file-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    onChange={handleImageUpload}
+                    aria-label="Upload property image"
+                  />
+                  <button type="button" className="gold-button admin-upload-button" onClick={() => imageInputRef.current?.click()}>
+                    <ImagePlus size={18} /> Upload Property Image
+                  </button>
+                  <span className="admin-upload-hint">JPG, JPEG, PNG or WEBP, up to 5 MB</span>
+                  {imageError && <span className="admin-image-error" role="alert">{imageError}</span>}
+                </div>
+                {imagePreview && (
+                  <div className="admin-image-preview">
+                    <img src={imagePreview} alt="Selected property preview" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    <div className="admin-image-details">
+                      <span><ImagePlus size={16} /> {imageName || "Current property image"}</span>
+                      <button type="button" className="admin-remove-image" onClick={() => { update("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button>
+                    </div>
+                  </div>
+                )}
                 <button type="submit" className="gold-button admin-save"><Save size={18} /> {isEditing ? "Update Property" : "Publish Property"}</button>
               </form>
             </section>
