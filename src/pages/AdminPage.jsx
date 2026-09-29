@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
+  deletePropertyFromSupabase,
+  insertPropertyInSupabase,
+  loadAdminPropertiesFromSupabase,
+  setPropertyPublishedInSupabase,
+  updatePropertyInSupabase,
+} from "../contentStore";
+import {
   ArrowLeft,
   Building2,
   FileText,
@@ -117,6 +124,7 @@ function AdminPage({ content, onChange, onBackHome }) {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [sessionUserEmail, setSessionUserEmail] = useState("");
   const [adminSessionChecked, setAdminSessionChecked] = useState(false);
+  const [isSavingProperty, setIsSavingProperty] = useState(false);
   const imageInputRef = useRef(null);
   const isSupabaseReady = Boolean(supabase);
   const activeMeta = sections.find((section) => section.id === activeSection);
@@ -124,6 +132,24 @@ function AdminPage({ content, onChange, onBackHome }) {
   const isRecordSection = Boolean(emptyRecords[activeSection]);
   const fields = fieldDefinitions[activeSection] ?? [];
   const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
+
+  useEffect(() => {
+    if (!isAdminAuthenticated || activeSection !== "properties") return undefined;
+
+    let active = true;
+    loadAdminPropertiesFromSupabase()
+      .then((properties) => {
+        if (active) onChange((current) => ({ ...current, properties }));
+      })
+      .catch((error) => {
+        console.error("Could not load admin properties from Supabase.", error);
+        if (active) setNotice("Properties could not be loaded from Supabase. Check your connection and admin access.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdminAuthenticated, activeSection, onChange]);
 
   const verifyAdminAuthorization = async (userId) => {
     if (!userId || !supabase) return false;
@@ -387,7 +413,7 @@ function AdminPage({ content, onChange, onBackHome }) {
     optimizeImage();
   };
 
-  const saveRecord = (event) => {
+  const saveRecord = async (event) => {
     event.preventDefault();
 
     if (!isAdminAuthenticated) {
@@ -408,6 +434,33 @@ function AdminPage({ content, onChange, onBackHome }) {
       ...(activeSection === "locations" ? { description: form.shortDescription } : {}),
       ...(activeSection === "properties" ? { beds: Number(form.beds) || 0, baths: Number(form.baths) || 0 } : {}),
     };
+
+    if (activeSection === "properties") {
+      const { id: propertyId, ...propertyData } = record;
+      delete propertyData.created_at;
+      delete propertyData.updated_at;
+      setIsSavingProperty(true);
+      try {
+        const savedProperty = editingId
+          ? await updatePropertyInSupabase(propertyId, propertyData)
+          : await insertPropertyInSupabase(propertyData);
+        onChange((current) => ({
+          ...current,
+          properties: editingId
+            ? current.properties.map((item) => item.id === propertyId ? savedProperty : item)
+            : [savedProperty, ...current.properties],
+        }));
+        setNotice(`Property ${editingId ? "updated" : "added"} in Supabase.`);
+        startNewRecord();
+      } catch (error) {
+        console.error("Property save failed.", error);
+        setNotice(`Property could not be saved: ${error.message}`);
+      } finally {
+        setIsSavingProperty(false);
+      }
+      return;
+    }
+
     const nextItems = editingId
       ? sectionItems.map((item) => item.id === editingId ? record : item)
       : [record, ...sectionItems];
@@ -416,13 +469,27 @@ function AdminPage({ content, onChange, onBackHome }) {
     startNewRecord();
   };
 
-  const deleteRecord = (id) => {
+  const deleteRecord = async (id) => {
     if (!isAdminAuthenticated) {
       setNotice("Admin property writes are disabled until a Supabase authenticated admin session is configured.");
       return;
     }
 
     if (!window.confirm(`Delete this ${labels[activeSection]}?`)) return;
+
+    if (activeSection === "properties") {
+      try {
+        await deletePropertyFromSupabase(id);
+        onChange((current) => ({ ...current, properties: current.properties.filter((item) => item.id !== id) }));
+        setNotice("Property deleted from Supabase.");
+        if (editingId === id) startNewRecord();
+      } catch (error) {
+        console.error("Property delete failed.", error);
+        setNotice(`Property could not be deleted: ${error.message}`);
+      }
+      return;
+    }
+
     onChange({ ...content, [activeSection]: sectionItems.filter((item) => item.id !== id) });
     if (editingId === id) startNewRecord();
   };
@@ -430,6 +497,22 @@ function AdminPage({ content, onChange, onBackHome }) {
   const togglePublished = (record) => {
     if (!isAdminAuthenticated) {
       setNotice("Admin property writes are disabled until a Supabase authenticated admin session is configured.");
+      return;
+    }
+
+    if (activeSection === "properties") {
+      setPropertyPublishedInSupabase(record.id, !record.published)
+        .then((savedProperty) => {
+          onChange((current) => ({
+            ...current,
+            properties: current.properties.map((item) => item.id === savedProperty.id ? savedProperty : item),
+          }));
+          setNotice(`Property ${savedProperty.published ? "published" : "unpublished"} in Supabase.`);
+        })
+        .catch((error) => {
+          console.error("Property publish status update failed.", error);
+          setNotice(`Property visibility could not be updated: ${error.message}`);
+        });
       return;
     }
 
@@ -588,7 +671,7 @@ function AdminPage({ content, onChange, onBackHome }) {
                       </div>
                       {imagePreview && <div className="admin-image-preview"><img src={imagePreview} alt="Selected image preview" /><div className="admin-image-details"><span><ImagePlus size={16} /> {imageName || "Current image"}</span><button type="button" className="admin-remove-image" onClick={() => { updateForm("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button></div></div>}
                       <label className="admin-publish-toggle"><input type="checkbox" checked={Boolean(form.published)} onChange={(event) => updateForm("published", event.target.checked)} /><span>Published on website</span></label>
-                      <button type="submit" className="gold-button admin-save" disabled={!isAdminAuthenticated && activeSection === "properties"} aria-disabled={!isAdminAuthenticated && activeSection === "properties"}><Save size={18} /> {editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
+                      <button type="submit" className="gold-button admin-save" disabled={(!isAdminAuthenticated || isSavingProperty) && activeSection === "properties"} aria-disabled={(!isAdminAuthenticated || isSavingProperty) && activeSection === "properties"}><Save size={18} /> {isSavingProperty ? "Saving..." : editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
                     </form>
                   </section>
 

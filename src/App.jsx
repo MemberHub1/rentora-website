@@ -27,7 +27,6 @@ import {
   loadPublishedPropertiesFromSupabase,
   loadStoredPropertiesFallback,
   saveContent,
-  saveStoredPropertiesFallback,
 } from "./contentStore";
 import ArticlePage from "./pages/ArticlePage";
 import Contact from "./pages/Contact";
@@ -81,18 +80,18 @@ function App() {
   }, [content]);
 
   useEffect(() => {
+    if (currentPage === "admin") return undefined;
+
     let active = true;
 
     const loadPublishedProperties = async () => {
       try {
-        const fallbackProperties = loadStoredPropertiesFallback();
         const supabaseProperties = await loadPublishedPropertiesFromSupabase();
 
         if (!active) return;
 
-        const nextProperties = supabaseProperties.length > 0 ? supabaseProperties : fallbackProperties;
+        const nextProperties = supabaseProperties ?? loadStoredPropertiesFallback();
         setContent((current) => ({ ...current, properties: nextProperties }));
-        saveStoredPropertiesFallback(nextProperties);
         setPropertyLoadError("");
       } catch (error) {
         console.error("Could not load published properties from Supabase.", error);
@@ -107,7 +106,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentPage]);
 
   /* =========================
      FAVORITES

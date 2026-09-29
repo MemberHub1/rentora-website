@@ -107,13 +107,22 @@ export function loadContent() {
   }
 }
 
-export function saveStoredPropertiesFallback(properties) {
-  try {
-    window.localStorage.setItem(PROPERTY_STORAGE_KEY, JSON.stringify(properties));
-  } catch (error) {
-    console.error("RENTORA properties could not be saved in this browser.", error);
-  }
-}
+const mapSupabaseProperty = (property) => ({
+  id: property.id,
+  title: property.title ?? "",
+  location: property.location ?? "",
+  price: property.price ?? "",
+  type: property.type ?? "Apartment",
+  purpose: property.purpose ?? "For Rent",
+  beds: Number(property.beds ?? 0),
+  baths: Number(property.baths ?? 0),
+  area: property.area ?? "",
+  description: property.description ?? "",
+  image: property.image ?? "",
+  published: property.published === true,
+  created_at: property.created_at ?? null,
+  updated_at: property.updated_at ?? null,
+});
 
 export function loadStoredPropertiesFallback() {
   try {
@@ -127,7 +136,7 @@ export function loadStoredPropertiesFallback() {
 
 export async function loadPublishedPropertiesFromSupabase() {
   if (!supabase) {
-    return [];
+    return null;
   }
 
   const { data, error } = await supabase
@@ -140,30 +149,83 @@ export async function loadPublishedPropertiesFromSupabase() {
     throw error;
   }
 
-  return Array.isArray(data)
-    ? data.map((property) => ({
-        id: property.id,
-        title: property.title ?? "",
-        location: property.location ?? "",
-        price: property.price ?? "",
-        type: property.type ?? "Apartment",
-        purpose: property.purpose ?? "For Rent",
-        beds: Number(property.beds ?? 0),
-        baths: Number(property.baths ?? 0),
-        area: property.area ?? "",
-        description: property.description ?? "",
-        image: property.image ?? "",
-        published: property.published !== false,
-        created_at: property.created_at ?? null,
-        updated_at: property.updated_at ?? null,
-      }))
-    : [];
+  return Array.isArray(data) ? data.map(mapSupabaseProperty) : [];
+}
+
+export async function loadAdminPropertiesFromSupabase() {
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data.map(mapSupabaseProperty) : [];
+}
+
+export async function insertPropertyInSupabase(property) {
+  const { data, error } = await supabase
+    .from("properties")
+    .insert(property)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return mapSupabaseProperty(data);
+}
+
+export async function updatePropertyInSupabase(id, property) {
+  const { data, error } = await supabase
+    .from("properties")
+    .update(property)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return mapSupabaseProperty(data);
+}
+
+export async function deletePropertyFromSupabase(id) {
+  const { data, error } = await supabase
+    .from("properties")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+export async function setPropertyPublishedInSupabase(id, published) {
+  const { data, error } = await supabase
+    .from("properties")
+    .update({ published })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return mapSupabaseProperty(data);
 }
 
 export function saveContent(content) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(content));
-    window.localStorage.setItem(PROPERTY_STORAGE_KEY, JSON.stringify(content.properties));
+    const existingContent = window.localStorage.getItem(STORAGE_KEY);
+    if (!window.localStorage.getItem(PROPERTY_STORAGE_KEY) && existingContent) {
+      const legacyProperties = JSON.parse(existingContent).properties;
+      if (Array.isArray(legacyProperties)) {
+        window.localStorage.setItem(PROPERTY_STORAGE_KEY, JSON.stringify(legacyProperties));
+      }
+    }
+
+    const contentWithoutProperties = { ...content };
+    delete contentWithoutProperties.properties;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(contentWithoutProperties));
   } catch (error) {
     console.error("RENTORA content could not be saved in this browser.", error);
   }

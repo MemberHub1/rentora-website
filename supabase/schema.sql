@@ -169,6 +169,8 @@ grant select on public.properties, public.locations, public.articles,
   public.team_members, public.contact_info, public.website_settings
 to anon, authenticated;
 
+grant insert, update, delete on public.properties to authenticated;
+
 create table if not exists public.admin_users (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users (id) on delete cascade,
@@ -192,6 +194,16 @@ create policy "Admins can view own profile" on public.admin_users
 for select to authenticated using (user_id = auth.uid());
 
 grant select on public.admin_users to authenticated;
+
+drop policy if exists "Admins can read all properties" on public.properties;
+create policy "Admins can read all properties" on public.properties
+for select to authenticated using (
+  exists (
+    select 1
+    from public.admin_users au
+    where au.user_id = auth.uid()
+  )
+);
 
 drop policy if exists "Admins can insert properties" on public.properties;
 create policy "Admins can insert properties" on public.properties
