@@ -293,12 +293,28 @@ function AdminPage({ content, onChange, onBackHome }) {
       return;
     }
 
-    await supabase.auth.signOut();
-    setIsAdminAuthenticated(false);
-    setSessionUserEmail("");
-    setNotice("You have been signed out.");
-    setAuthStatus("Signed out. Please sign in to continue.");
-    setAuthError("");
+    try {
+      setNotice("Signing out...");
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        setNotice(error.message);
+        return;
+      }
+
+      setIsAdminAuthenticated(false);
+      setSessionUserEmail("");
+      setNotice("You have been signed out.");
+      setAuthStatus("Signed out. Please sign in to continue.");
+      setAuthError("");
+      setAuthForm({ email: "", password: "" });
+      setEditingId(null);
+      setForm(emptyRecords.properties);
+      setImageName("");
+      setImageError("");
+    } catch (error) {
+      console.error("Sign out failed.", error);
+      setNotice("Sign out failed. Please try again.");
+    }
   };
 
   const selectSection = (sectionId) => {
@@ -522,7 +538,7 @@ function AdminPage({ content, onChange, onBackHome }) {
           <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
           <div className="admin-user-actions">
             <span className="admin-label">{sessionUserEmail || "ADMIN"}</span>
-            <button className="gold-button admin-mobile-add" onClick={signOutAdmin}><X size={16} /> Sign Out</button>
+            <button className="gold-button admin-mobile-add" onClick={signOutAdmin} type="button"><X size={16} /> Logout</button>
           </div>
         </div>
       </header>
