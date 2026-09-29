@@ -87,8 +87,6 @@ function App() {
   const [propertyLoadError, setPropertyLoadError] = useState("");
 
   useEffect(() => {
-    if (currentPage === "admin") return undefined;
-
     let active = true;
 
     const loadPublishedContent = async () => {
@@ -114,7 +112,7 @@ function App() {
       active = false;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [currentPage]);
+  }, []);
 
   /* =========================
      FAVORITES
@@ -219,10 +217,7 @@ function App() {
   const openPropertyDetails = (property) => {
     setSelectedProperty(property);
     setCurrentPage("details");
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   const visibleProperties = siteProperties.filter((property) => {
