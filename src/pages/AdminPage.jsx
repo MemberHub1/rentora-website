@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
 import {
   ArrowLeft,
   Building2,
@@ -109,12 +110,163 @@ function AdminPage({ content, onChange, onBackHome }) {
   const [imageName, setImageName] = useState("");
   const [imageError, setImageError] = useState("");
   const [notice, setNotice] = useState("");
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [authError, setAuthError] = useState("");
+  const [authStatus, setAuthStatus] = useState("Checking admin access...");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [sessionUserEmail, setSessionUserEmail] = useState("");
+  const [adminSessionChecked, setAdminSessionChecked] = useState(false);
   const imageInputRef = useRef(null);
   const activeMeta = sections.find((section) => section.id === activeSection);
   const sectionItems = content[activeSection] ?? [];
   const isRecordSection = Boolean(emptyRecords[activeSection]);
   const fields = fieldDefinitions[activeSection] ?? [];
   const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
+
+  const verifyAdminAuthorization = async (userId) => {
+    if (!userId) return false;
+
+    const { data, error } = await supabase
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error && error.code !== "PGRST116") {
+      throw error;
+    }
+
+    return Boolean(data);
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    const syncAdminSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!active) return;
+
+        if (session?.user) {
+          const authorized = await verifyAdminAuthorization(session.user.id);
+          setIsAdminAuthenticated(authorized);
+          setSessionUserEmail(session.user.email ?? "");
+          setAuthStatus(authorized ? "Authorized admin session active." : "This account is not registered in admin_users.");
+        } else {
+          setIsAdminAuthenticated(false);
+          setSessionUserEmail("");
+          setAuthStatus("Sign in with a RENTORA admin account.");
+        }
+      } catch (error) {
+        console.error("Admin session verification failed.", error);
+        if (!active) return;
+        setIsAdminAuthenticated(false);
+        setSessionUserEmail("");
+        setAuthStatus("Unable to verify admin access right now.");
+      } finally {
+        if (active) {
+          setAdminSessionChecked(true);
+          setIsCheckingAuth(false);
+        }
+      }
+    };
+
+    syncAdminSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!active) return;
+
+      if (session?.user) {
+        try {
+          const authorized = await verifyAdminAuthorization(session.user.id);
+          setIsAdminAuthenticated(authorized);
+          setSessionUserEmail(session.user.email ?? "");
+          setAuthStatus(authorized ? "Authorized admin session active." : "This account is not registered in admin_users.");
+        } catch (error) {
+          console.error("Auth state sync failed.", error);
+          setIsAdminAuthenticated(false);
+          setSessionUserEmail("");
+          setAuthStatus("Unable to verify admin access right now.");
+        }
+      } else {
+        setIsAdminAuthenticated(false);
+        setSessionUserEmail("");
+        setAuthStatus("Sign in with a RENTORA admin account.");
+      }
+
+      setAdminSessionChecked(true);
+      setIsCheckingAuth(false);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const signInAdmin = async (event) => {
+    event.preventDefault();
+    setAuthError("");
+    setAuthStatus("Signing in...");
+
+    const email = authForm.email.trim();
+    const password = authForm.password;
+
+    if (!email || !password) {
+      setAuthError("Please enter your email and password.");
+      setAuthStatus("Sign in failed.");
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setAuthError(error.message);
+      setAuthStatus("Sign in failed.");
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (!userId) {
+      setAuthError("No user session was returned. Please try again.");
+      setAuthStatus("Sign in failed.");
+      return;
+    }
+
+    try {
+      const authorized = await verifyAdminAuthorization(userId);
+      if (!authorized) {
+        await supabase.auth.signOut();
+        setIsAdminAuthenticated(false);
+        setSessionUserEmail("");
+        setAuthError("This account is not authorized as a RENTORA admin.");
+        setAuthStatus("Account not authorized.");
+        return;
+      }
+
+      setIsAdminAuthenticated(true);
+      setSessionUserEmail(data.user.email ?? "");
+      setAuthStatus("Authorized admin session active.");
+      setAuthForm({ email: "", password: "" });
+    } catch (error) {
+      console.error("Admin authorization check failed.", error);
+      await supabase.auth.signOut();
+      setIsAdminAuthenticated(false);
+      setSessionUserEmail("");
+      setAuthError("Unable to verify admin access for this account.");
+      setAuthStatus("Authorization check failed.");
+    }
+  };
+
+  const signOutAdmin = async () => {
+    await supabase.auth.signOut();
+    setIsAdminAuthenticated(false);
+    setSessionUserEmail("");
+    setNotice("You have been signed out.");
+    setAuthStatus("Signed out. Please sign in to continue.");
+    setAuthError("");
+  };
 
   const selectSection = (sectionId) => {
     setActiveSection(sectionId);
@@ -188,6 +340,12 @@ function AdminPage({ content, onChange, onBackHome }) {
 
   const saveRecord = (event) => {
     event.preventDefault();
+
+    if (!isAdminAuthenticated) {
+      setNotice("Admin property writes are disabled until a Supabase authenticated admin session is configured.");
+      return;
+    }
+
     if (activeSection === "properties" && !form.image) {
       setImageError("Please upload a property image before saving.");
       return;
@@ -210,12 +368,22 @@ function AdminPage({ content, onChange, onBackHome }) {
   };
 
   const deleteRecord = (id) => {
+    if (!isAdminAuthenticated) {
+      setNotice("Admin property writes are disabled until a Supabase authenticated admin session is configured.");
+      return;
+    }
+
     if (!window.confirm(`Delete this ${labels[activeSection]}?`)) return;
     onChange({ ...content, [activeSection]: sectionItems.filter((item) => item.id !== id) });
     if (editingId === id) startNewRecord();
   };
 
   const togglePublished = (record) => {
+    if (!isAdminAuthenticated) {
+      setNotice("Admin property writes are disabled until a Supabase authenticated admin session is configured.");
+      return;
+    }
+
     onChange({
       ...content,
       [activeSection]: sectionItems.map((item) => item.id === record.id ? { ...item, published: !item.published } : item),
@@ -227,6 +395,12 @@ function AdminPage({ content, onChange, onBackHome }) {
     onChange({ ...content, [activeSection]: form });
     setNotice(`${activeMeta.label} saved.`);
   };
+
+  const adminWriteStatus = adminSessionChecked
+    ? isAdminAuthenticated
+      ? "Authenticated admin access is available for CMS writes."
+      : "Admin write operations are disabled because there is no authenticated Supabase admin session yet."
+    : "Checking Supabase admin session status...";
 
   const renderFields = (definitions) => definitions.map((field) => (
     <label className={field.wide ? "admin-field-wide" : ""} key={field.key}>
@@ -243,13 +417,80 @@ function AdminPage({ content, onChange, onBackHome }) {
     </label>
   ));
 
+  if (isCheckingAuth || (!isAdminAuthenticated && !adminSessionChecked)) {
+    return (
+      <div className="site admin-page">
+        <header className="header">
+          <div className="container nav-container admin-nav">
+            <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
+            <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
+            <span className="admin-label">ADMIN ACCESS</span>
+          </div>
+        </header>
+        <main className="admin-main">
+          <div className="container">
+            <section className="admin-settings-card">
+              <div className="admin-card-heading"><div><h3>Checking admin access</h3><p>{authStatus}</p></div></div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="site admin-page">
+        <header className="header">
+          <div className="container nav-container admin-nav">
+            <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
+            <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
+            <span className="admin-label">ADMIN LOGIN</span>
+          </div>
+        </header>
+
+        <main className="admin-main">
+          <div className="container">
+            <section className="admin-form-card" style={{ maxWidth: 520, margin: "2rem auto" }}>
+              <div className="admin-card-heading">
+                <div>
+                  <h3>RENTORA Admin Login</h3>
+                  <p>Sign in with the admin account registered in Supabase Auth and admin_users.</p>
+                </div>
+              </div>
+
+              <form onSubmit={signInAdmin} className="admin-form">
+                <label>
+                  Email
+                  <input type="email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} placeholder="admin@rentora.com" required />
+                </label>
+                <label>
+                  Password
+                  <input type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="Enter your password" required />
+                </label>
+
+                {authError && <p className="admin-notice" role="alert">{authError}</p>}
+                <p className="admin-notice" role="status">{authStatus}</p>
+
+                <button type="submit" className="gold-button admin-save"><Save size={18} /> Sign In</button>
+              </form>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="site admin-page">
       <header className="header">
         <div className="container nav-container admin-nav">
           <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
           <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
-          <span className="admin-label">CONTENT MANAGEMENT</span>
+          <div className="admin-user-actions">
+            <span className="admin-label">{sessionUserEmail || "ADMIN"}</span>
+            <button className="gold-button admin-mobile-add" onClick={signOutAdmin}><X size={16} /> Sign Out</button>
+          </div>
         </div>
       </header>
 
@@ -278,6 +519,7 @@ function AdminPage({ content, onChange, onBackHome }) {
               </div>
 
               {notice && <p className="admin-notice" role="status">{notice}</p>}
+              {activeSection === "properties" && <p className="admin-notice" role="status">{adminWriteStatus}</p>}
 
               {isRecordSection ? (
                 <div className="admin-content-grid">
@@ -297,7 +539,7 @@ function AdminPage({ content, onChange, onBackHome }) {
                       </div>
                       {imagePreview && <div className="admin-image-preview"><img src={imagePreview} alt="Selected image preview" /><div className="admin-image-details"><span><ImagePlus size={16} /> {imageName || "Current image"}</span><button type="button" className="admin-remove-image" onClick={() => { updateForm("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button></div></div>}
                       <label className="admin-publish-toggle"><input type="checkbox" checked={Boolean(form.published)} onChange={(event) => updateForm("published", event.target.checked)} /><span>Published on website</span></label>
-                      <button type="submit" className="gold-button admin-save"><Save size={18} /> {editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
+                      <button type="submit" className="gold-button admin-save" disabled={!isAdminAuthenticated && activeSection === "properties"} aria-disabled={!isAdminAuthenticated && activeSection === "properties"}><Save size={18} /> {editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
                     </form>
                   </section>
 
@@ -310,7 +552,7 @@ function AdminPage({ content, onChange, onBackHome }) {
                         return <article className="admin-record-row" key={record.id}>
                           {record.image ? <img src={record.image} alt="" /> : <span className="admin-record-placeholder"><activeMeta.icon size={19} /></span>}
                           <div className="admin-record-info"><strong>{recordTitle}</strong><span>{record.location || record.role || record.shortDescription || record.price || record.author || "RENTORA content"}</span><small className={record.published ? "published" : "unpublished"}>{record.published ? "Published" : "Unpublished"}</small></div>
-                          <div className="admin-record-actions"><button className="admin-text-action" onClick={() => togglePublished(record)}>{record.published ? "Unpublish" : "Publish"}</button><button className="icon-button" onClick={() => editRecord(record)} aria-label={`Edit ${recordTitle}`}><Settings2 size={17} /></button><button className="icon-button danger" onClick={() => deleteRecord(record.id)} aria-label={`Delete ${recordTitle}`}><Trash2 size={17} /></button></div>
+                          <div className="admin-record-actions"><button className="admin-text-action" onClick={() => togglePublished(record)} disabled={!isAdminAuthenticated && activeSection === "properties"} aria-disabled={!isAdminAuthenticated && activeSection === "properties"}>{record.published ? "Unpublish" : "Publish"}</button><button className="icon-button" onClick={() => editRecord(record)} aria-label={`Edit ${recordTitle}`}><Settings2 size={17} /></button><button className="icon-button danger" onClick={() => deleteRecord(record.id)} aria-label={`Delete ${recordTitle}`} disabled={!isAdminAuthenticated && activeSection === "properties"} aria-disabled={!isAdminAuthenticated && activeSection === "properties"}><Trash2 size={17} /></button></div>
                         </article>;
                       })}
                     </div>

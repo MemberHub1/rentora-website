@@ -22,7 +22,13 @@ import {
 } from "lucide-react";
 
 import "./App.css";
-import { loadContent, saveContent } from "./contentStore";
+import {
+  loadContent,
+  loadPublishedPropertiesFromSupabase,
+  loadStoredPropertiesFallback,
+  saveContent,
+  saveStoredPropertiesFallback,
+} from "./contentStore";
 import ArticlePage from "./pages/ArticlePage";
 import Contact from "./pages/Contact";
 import AboutUs from "./pages/AboutUs";
@@ -68,9 +74,40 @@ function App() {
   );
 
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [propertyLoadError, setPropertyLoadError] = useState("");
+
   useEffect(() => {
     saveContent(content);
   }, [content]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadPublishedProperties = async () => {
+      try {
+        const fallbackProperties = loadStoredPropertiesFallback();
+        const supabaseProperties = await loadPublishedPropertiesFromSupabase();
+
+        if (!active) return;
+
+        const nextProperties = supabaseProperties.length > 0 ? supabaseProperties : fallbackProperties;
+        setContent((current) => ({ ...current, properties: nextProperties }));
+        saveStoredPropertiesFallback(nextProperties);
+        setPropertyLoadError("");
+      } catch (error) {
+        console.error("Could not load published properties from Supabase.", error);
+        if (!active) return;
+        setContent((current) => ({ ...current, properties: loadStoredPropertiesFallback() }));
+        setPropertyLoadError("Using saved property data while Supabase is unavailable.");
+      }
+    };
+
+    loadPublishedProperties();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   /* =========================
      FAVORITES
@@ -96,6 +133,10 @@ function App() {
       behavior: "smooth",
     });
   };
+
+  const propertyStatusNotice = propertyLoadError ? (
+    <div className="admin-notice" role="status">{propertyLoadError}</div>
+  ) : null;
 
   /* =========================
      CLOSE MOBILE MENU
@@ -953,6 +994,7 @@ function App() {
       ===================================================== */}
 
       <main>
+        {propertyStatusNotice}
 
         {/* HERO */}
         <section

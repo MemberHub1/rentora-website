@@ -1,6 +1,7 @@
 import { articles as defaultArticles } from "./articles";
 import { googleMapsUrl, officeLocation } from "./contactDetails";
 import { projects, properties as defaultProperties } from "./properties";
+import { supabase } from "./lib/supabaseClient";
 
 const STORAGE_KEY = "rentora-cms";
 const PROPERTY_STORAGE_KEY = "rentora-properties";
@@ -104,6 +105,55 @@ export function loadContent() {
   } catch {
     return defaultContent;
   }
+}
+
+export function saveStoredPropertiesFallback(properties) {
+  try {
+    window.localStorage.setItem(PROPERTY_STORAGE_KEY, JSON.stringify(properties));
+  } catch (error) {
+    console.error("RENTORA properties could not be saved in this browser.", error);
+  }
+}
+
+export function loadStoredPropertiesFallback() {
+  try {
+    const savedProperties = window.localStorage.getItem(PROPERTY_STORAGE_KEY);
+    const properties = savedProperties ? JSON.parse(savedProperties) : defaultPropertyData;
+    return normalizeRecords(properties, defaultPropertyData, "property");
+  } catch {
+    return defaultPropertyData;
+  }
+}
+
+export async function loadPublishedPropertiesFromSupabase() {
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .eq("published", true)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data)
+    ? data.map((property) => ({
+        id: property.id,
+        title: property.title ?? "",
+        location: property.location ?? "",
+        price: property.price ?? "",
+        type: property.type ?? "Apartment",
+        purpose: property.purpose ?? "For Rent",
+        beds: Number(property.beds ?? 0),
+        baths: Number(property.baths ?? 0),
+        area: property.area ?? "",
+        description: property.description ?? "",
+        image: property.image ?? "",
+        published: property.published !== false,
+        created_at: property.created_at ?? null,
+        updated_at: property.updated_at ?? null,
+      }))
+    : [];
 }
 
 export function saveContent(content) {
