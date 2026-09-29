@@ -11,7 +11,7 @@ const initialForm = {
   message: "",
 };
 
-function Contact({ contact, website, footerText, onNavigateHome }) {
+function Contact({ contact, socialLinks = [], website, footerText, onNavigateHome }) {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -141,8 +141,8 @@ function Contact({ contact, website, footerText, onNavigateHome }) {
         </div>
 
         <nav className="contact-social-links" aria-label="RENTORA social media">
-          {["facebook", "instagram", "tiktok", "youtube"].filter((network) => contact[`${network}Url`]).map((network) => (
-            <a key={network} href={contact[`${network}Url`]} target="_blank" rel="noreferrer">{network}</a>
+          {socialLinks.map((link) => (
+            <a key={link.id || link.url} href={link.url} target="_blank" rel="noreferrer">{link.displayName || link.platform}</a>
           ))}
         </nav>
       </section>

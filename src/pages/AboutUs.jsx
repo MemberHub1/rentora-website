@@ -24,7 +24,7 @@ function AboutUs({ website, footerText, onNavigateHome }) {
 
         <figure className="about-page-image">
           <img
-            src="/assets/apartment-3.jpg"
+            src={website.aboutImage || "/assets/apartment-3.jpg"}
             alt="A RENTORA featured home in Lahore"
           />
           <figcaption>

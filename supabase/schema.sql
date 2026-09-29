@@ -65,6 +65,16 @@ create table if not exists public.team_members (
   updated_at timestamptz not null default pg_catalog.now()
 );
 
+create table if not exists public.social_links (
+  id text primary key default gen_random_uuid()::text,
+  platform text not null,
+  display_name text,
+  url text not null,
+  published boolean not null default false,
+  created_at timestamptz not null default pg_catalog.now(),
+  updated_at timestamptz not null default pg_catalog.now()
+);
+
 create table if not exists public.contact_info (
   id text primary key default 'default' check (id = 'default'),
   phone text,
@@ -78,6 +88,7 @@ create table if not exists public.contact_info (
   tiktok_url text,
   youtube_url text,
   whatsapp_url text,
+  whatsapp_channel_url text,
   created_at timestamptz not null default pg_catalog.now(),
   updated_at timestamptz not null default pg_catalog.now()
 );
@@ -88,11 +99,17 @@ create table if not exists public.website_settings (
   hero_subtitle text,
   about_heading text,
   about_description text,
+  hero_image text,
+  about_image text,
   footer_text text,
   tagline text,
   created_at timestamptz not null default pg_catalog.now(),
   updated_at timestamptz not null default pg_catalog.now()
 );
+
+alter table public.contact_info add column if not exists whatsapp_channel_url text;
+alter table public.website_settings add column if not exists hero_image text;
+alter table public.website_settings add column if not exists about_image text;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -121,6 +138,10 @@ drop trigger if exists team_members_set_updated_at on public.team_members;
 create trigger team_members_set_updated_at before update on public.team_members
 for each row execute function public.set_updated_at();
 
+drop trigger if exists social_links_set_updated_at on public.social_links;
+create trigger social_links_set_updated_at before update on public.social_links
+for each row execute function public.set_updated_at();
+
 drop trigger if exists contact_info_set_updated_at on public.contact_info;
 create trigger contact_info_set_updated_at before update on public.contact_info
 for each row execute function public.set_updated_at();
@@ -133,6 +154,7 @@ alter table public.properties enable row level security;
 alter table public.locations enable row level security;
 alter table public.articles enable row level security;
 alter table public.team_members enable row level security;
+alter table public.social_links enable row level security;
 alter table public.contact_info enable row level security;
 alter table public.website_settings enable row level security;
 
@@ -152,6 +174,10 @@ drop policy if exists "Public can read published team members" on public.team_me
 create policy "Public can read published team members" on public.team_members
 for select to anon, authenticated using (published is true);
 
+drop policy if exists "Public can read published social links" on public.social_links;
+create policy "Public can read published social links" on public.social_links
+for select to anon, authenticated using (published is true);
+
 drop policy if exists "Public can read contact info" on public.contact_info;
 create policy "Public can read contact info" on public.contact_info
 for select to anon, authenticated using (true);
@@ -162,11 +188,11 @@ for select to anon, authenticated using (true);
 
 revoke insert, update, delete, truncate, references, trigger
 on public.properties, public.locations, public.articles, public.team_members,
-   public.contact_info, public.website_settings
+   public.social_links, public.contact_info, public.website_settings
 from anon, authenticated;
 
 grant select on public.properties, public.locations, public.articles,
-  public.team_members, public.contact_info, public.website_settings
+  public.team_members, public.social_links, public.contact_info, public.website_settings
 to anon, authenticated;
 
 grant insert, update, delete on public.properties to authenticated;
@@ -241,3 +267,98 @@ for delete to authenticated using (
     where au.user_id = auth.uid()
   )
 );
+
+grant insert, update, delete on public.locations, public.articles,
+  public.team_members, public.social_links, public.contact_info, public.website_settings
+to authenticated;
+
+drop policy if exists "Admins can manage locations" on public.locations;
+create policy "Admins can manage locations" on public.locations for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+drop policy if exists "Admins can manage articles" on public.articles;
+create policy "Admins can manage articles" on public.articles for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+drop policy if exists "Admins can manage team members" on public.team_members;
+create policy "Admins can manage team members" on public.team_members for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+drop policy if exists "Admins can manage social links" on public.social_links;
+create policy "Admins can manage social links" on public.social_links for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+drop policy if exists "Admins can manage contact info" on public.contact_info;
+create policy "Admins can manage contact info" on public.contact_info for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+drop policy if exists "Admins can manage website settings" on public.website_settings;
+create policy "Admins can manage website settings" on public.website_settings for all to authenticated
+using (exists (select 1 from public.admin_users au where au.user_id = auth.uid()))
+with check (exists (select 1 from public.admin_users au where au.user_id = auth.uid()));
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('cms-images', 'cms-images', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Public can read CMS images" on storage.objects;
+create policy "Public can read CMS images" on storage.objects
+for select to anon, authenticated using (bucket_id = 'cms-images');
+
+drop policy if exists "Admins can upload CMS images" on storage.objects;
+create policy "Admins can upload CMS images" on storage.objects
+for insert to authenticated with check (
+  bucket_id = 'cms-images' and exists (
+    select 1 from public.admin_users au where au.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Admins can update CMS images" on storage.objects;
+create policy "Admins can update CMS images" on storage.objects
+for update to authenticated using (
+  bucket_id = 'cms-images' and exists (
+    select 1 from public.admin_users au where au.user_id = auth.uid()
+  )
+) with check (
+  bucket_id = 'cms-images' and exists (
+    select 1 from public.admin_users au where au.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Admins can delete CMS images" on storage.objects;
+create policy "Admins can delete CMS images" on storage.objects
+for delete to authenticated using (
+  bucket_id = 'cms-images' and exists (
+    select 1 from public.admin_users au where au.user_id = auth.uid()
+  )
+);
+
+do $$
+declare
+  table_name text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach table_name in array array[
+      'properties', 'locations', 'articles', 'team_members', 'social_links',
+      'contact_info', 'website_settings'
+    ] loop
+      if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = table_name
+      ) then
+        execute format('alter publication supabase_realtime add table public.%I', table_name);
+      end if;
+    end loop;
+  end if;
+end;
+$$;

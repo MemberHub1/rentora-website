@@ -18,6 +18,7 @@ const defaultContact = {
   tiktokUrl: "",
   youtubeUrl: "",
   whatsappUrl: "https://wa.me/923187630194",
+  whatsappChannelUrl: "",
 };
 
 const defaultWebsite = {
@@ -25,6 +26,8 @@ const defaultWebsite = {
   heroSubtitle: "Discover premium apartments, houses, plots and commercial properties in Lahore with RENTORA.",
   aboutHeading: "Find your perfect place. Live better.",
   aboutDescription: "RENTORA is a Lahore-focused property platform that brings homes, apartments, and local property opportunities together in one straightforward place.\n\nWe make it easier to compare the details that matter, explore different neighbourhoods, and start a conversation when a listing feels right. Whether you are renting, buying, or exploring your options, our aim is to make the next step clearer.",
+  heroImage: "",
+  aboutImage: "",
   footerText: "A modern real-estate platform designed to help you discover apartments, houses, plots and commercial properties in Lahore.",
   tagline: "Property Made Simple",
 };
@@ -63,13 +66,6 @@ const defaultArticleData = defaultArticles.map((article) => ({
   published: true,
 }));
 
-const normalizeRecords = (records, defaults, prefix) => records.map((record, index) => ({
-  ...defaults[index],
-  ...record,
-  id: record.id || `${prefix}-${index + 1}`,
-  published: record.published !== false,
-}));
-
 export const defaultContent = {
   properties: defaultPropertyData,
   locations: defaultLocations,
@@ -79,154 +75,213 @@ export const defaultContent = {
   website: defaultWebsite,
 };
 
+export const emptyContent = {
+  ...defaultContent,
+  properties: [],
+  locations: [],
+  articles: [],
+  team: [],
+  socialLinks: [],
+};
+
 export function loadContent() {
-  try {
-    const savedContent = window.localStorage.getItem(STORAGE_KEY);
-    if (savedContent) {
-      const parsed = JSON.parse(savedContent);
-      return {
-        ...defaultContent,
-        ...parsed,
-        properties: Array.isArray(parsed.properties) ? normalizeRecords(parsed.properties, defaultPropertyData, "property") : defaultPropertyData,
-        locations: Array.isArray(parsed.locations) ? normalizeRecords(parsed.locations, defaultLocations, "location") : defaultLocations,
-        articles: Array.isArray(parsed.articles) ? normalizeRecords(parsed.articles, defaultArticleData, "article") : defaultArticleData,
-        team: Array.isArray(parsed.team) ? normalizeRecords(parsed.team, defaultTeam, "team") : defaultTeam,
-        contact: { ...defaultContact, ...parsed.contact },
-        website: { ...defaultWebsite, ...parsed.website },
-      };
-    }
-
-    const savedProperties = window.localStorage.getItem(PROPERTY_STORAGE_KEY);
-    const properties = savedProperties ? JSON.parse(savedProperties) : defaultPropertyData;
-    return {
-      ...defaultContent,
-      properties: normalizeRecords(properties, defaultPropertyData, "property"),
-    };
-  } catch {
-    return defaultContent;
-  }
+  return emptyContent;
 }
 
-const mapSupabaseProperty = (property) => ({
-  id: property.id,
-  title: property.title ?? "",
-  location: property.location ?? "",
-  price: property.price ?? "",
-  type: property.type ?? "Apartment",
-  purpose: property.purpose ?? "For Rent",
-  beds: Number(property.beds ?? 0),
-  baths: Number(property.baths ?? 0),
-  area: property.area ?? "",
-  description: property.description ?? "",
-  image: property.image ?? "",
-  published: property.published === true,
-  created_at: property.created_at ?? null,
-  updated_at: property.updated_at ?? null,
-});
+const sectionTables = {
+  properties: "properties",
+  locations: "locations",
+  articles: "articles",
+  team: "team_members",
+  socialLinks: "social_links",
+};
 
-export function loadStoredPropertiesFallback() {
-  try {
-    const savedProperties = window.localStorage.getItem(PROPERTY_STORAGE_KEY);
-    const properties = savedProperties ? JSON.parse(savedProperties) : defaultPropertyData;
-    return normalizeRecords(properties, defaultPropertyData, "property");
-  } catch {
-    return defaultPropertyData;
-  }
-}
+const sectionColumns = {
+  locations: { shortDescription: "short_description", propertyCount: "property_count" },
+  articles: { shortDescription: "short_description", readTime: "read_time", date: "publication_date" },
+  team: { facebookUrl: "facebook_url", instagramUrl: "instagram_url", linkedinUrl: "linkedin_url", socialLinks: "social_links" },
+  socialLinks: { displayName: "display_name" },
+  contact: {
+    mapsUrl: "maps_url", businessHours: "business_hours", facebookUrl: "facebook_url",
+    instagramUrl: "instagram_url", tiktokUrl: "tiktok_url", youtubeUrl: "youtube_url",
+    whatsappUrl: "whatsapp_url", whatsappChannelUrl: "whatsapp_channel_url",
+  },
+  website: {
+    heroHeading: "hero_heading", heroSubtitle: "hero_subtitle", aboutHeading: "about_heading",
+    aboutDescription: "about_description", heroImage: "hero_image", aboutImage: "about_image", footerText: "footer_text",
+  },
+};
 
-export async function loadPublishedPropertiesFromSupabase() {
-  if (!supabase) {
-    return null;
-  }
+const mapRecordFromSupabase = (section, record) => {
+  const columns = sectionColumns[section] ?? {};
+  const mapped = Object.fromEntries(Object.entries(record).map(([key, value]) => [
+    Object.keys(columns).find((field) => columns[field] === key) ?? key,
+    value,
+  ]));
+  if (section === "articles") mapped.date = mapped.publication_date ?? mapped.date ?? "";
+  return mapped;
+};
 
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("published", true)
-    .order("created_at", { ascending: false });
+const mapRecordToSupabase = (section, record) => {
+  const columns = sectionColumns[section] ?? {};
+  return Object.fromEntries(Object.entries(record)
+    .filter(([key, value]) => key !== "created_at" && key !== "updated_at" && value !== undefined)
+    .map(([key, value]) => [columns[key] ?? key, key === "date" && section === "articles" && !value ? null : value]));
+};
 
-  if (error) {
-    throw error;
-  }
-
-  return Array.isArray(data) ? data.map(mapSupabaseProperty) : [];
-}
-
-export async function loadAdminPropertiesFromSupabase() {
-  if (!supabase) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .order("created_at", { ascending: false });
-
+const readSingleton = async (table, defaults) => {
+  const { data, error } = await supabase.from(table).select("*").eq("id", "default").maybeSingle();
   if (error) throw error;
-  return Array.isArray(data) ? data.map(mapSupabaseProperty) : [];
+  return data ? { ...defaults, ...mapRecordFromSupabase(table === "contact_info" ? "contact" : "website", data) } : defaults;
+};
+
+export async function loadCmsContentFromSupabase({ admin = false } = {}) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const sections = Object.entries(sectionTables);
+  const results = await Promise.all(sections.map(async ([section, table]) => {
+    let query = supabase.from(table).select("*");
+    if (!admin) query = query.eq("published", true);
+    query = query.order("created_at", { ascending: false });
+    const { data, error } = await query;
+    if (error && !(section === "socialLinks" && error.code === "PGRST205")) throw error;
+    return [section, (data ?? []).map((record) => mapRecordFromSupabase(section, record))];
+  }));
+
+  return {
+    ...emptyContent,
+    ...Object.fromEntries(results),
+    contact: await readSingleton("contact_info", defaultContact),
+    website: await readSingleton("website_settings", defaultWebsite),
+  };
 }
 
-export async function insertPropertyInSupabase(property) {
-  const { data, error } = await supabase
-    .from("properties")
-    .insert(property)
-    .select("*")
-    .single();
+export const loadPublishedCmsContentFromSupabase = () => loadCmsContentFromSupabase();
+export const loadAdminCmsContentFromSupabase = () => loadCmsContentFromSupabase({ admin: true });
 
+export async function saveCmsRecordInSupabase(section, record, { singleton = false } = {}) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const table = section === "contact" ? "contact_info" : section === "website" ? "website_settings" : sectionTables[section];
+  if (!table) throw new Error(`Unknown CMS section: ${section}`);
+  const payload = { ...mapRecordToSupabase(section, record), id: singleton ? "default" : record.id };
+  const query = singleton
+    ? supabase.from(table).upsert(payload, { onConflict: "id" })
+    : supabase.from(table).insert(payload);
+  const { data, error } = await query.select("*").single();
   if (error) throw error;
-  return mapSupabaseProperty(data);
+  return singleton
+    ? { ...(section === "contact" ? defaultContact : defaultWebsite), ...mapRecordFromSupabase(section, data) }
+    : mapRecordFromSupabase(section, data);
 }
 
-export async function updatePropertyInSupabase(id, property) {
-  const { data, error } = await supabase
-    .from("properties")
-    .update(property)
-    .eq("id", id)
-    .select("*")
-    .single();
-
+export async function updateCmsRecordInSupabase(section, id, record) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const table = sectionTables[section];
+  if (!table) throw new Error(`Unknown CMS section: ${section}`);
+  const { data, error } = await supabase.from(table).update(mapRecordToSupabase(section, record)).eq("id", id).select("*").single();
   if (error) throw error;
-  return mapSupabaseProperty(data);
+  return mapRecordFromSupabase(section, data);
 }
 
-export async function deletePropertyFromSupabase(id) {
-  const { data, error } = await supabase
-    .from("properties")
-    .delete()
-    .eq("id", id)
-    .select("id")
-    .single();
-
+export async function deleteCmsRecordFromSupabase(section, id) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const table = sectionTables[section];
+  if (!table) throw new Error(`Unknown CMS section: ${section}`);
+  const { data, error } = await supabase.from(table).delete().eq("id", id).select("id").single();
   if (error) throw error;
   return data.id;
 }
 
-export async function setPropertyPublishedInSupabase(id, published) {
-  const { data, error } = await supabase
-    .from("properties")
-    .update({ published })
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return mapSupabaseProperty(data);
+export async function setCmsRecordPublishedInSupabase(section, id, published) {
+  return updateCmsRecordInSupabase(section, id, { published });
 }
 
-export function saveContent(content) {
+export async function uploadCmsImage(section, recordId, imageFile) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  let file = imageFile;
+  if (typeof imageFile === "string" && imageFile.startsWith("data:")) {
+    const response = await fetch(imageFile);
+    file = await response.blob();
+  }
+  const extension = file.type === "image/png" ? "png" : file.type === "image/jpeg" ? "jpg" : "webp";
+  const path = `${section}/${recordId}-${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from("cms-images").upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return supabase.storage.from("cms-images").getPublicUrl(path).data.publicUrl;
+}
+
+export function readLegacyContentForMigration() {
+  if (typeof window === "undefined") return null;
   try {
-    const existingContent = window.localStorage.getItem(STORAGE_KEY);
-    if (!window.localStorage.getItem(PROPERTY_STORAGE_KEY) && existingContent) {
-      const legacyProperties = JSON.parse(existingContent).properties;
-      if (Array.isArray(legacyProperties)) {
-        window.localStorage.setItem(PROPERTY_STORAGE_KEY, JSON.stringify(legacyProperties));
+    const legacy = window.localStorage.getItem(STORAGE_KEY);
+    const properties = window.localStorage.getItem(PROPERTY_STORAGE_KEY);
+    if (!legacy && !properties) return null;
+    const parsed = legacy ? JSON.parse(legacy) : {};
+    return {
+      ...parsed,
+      properties: Array.isArray(parsed.properties) ? parsed.properties : properties ? JSON.parse(properties) : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function migrateLegacyContentToSupabase(legacyContent) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const current = await loadAdminCmsContentFromSupabase();
+  const imported = {};
+  let skipped = 0;
+
+  for (const section of Object.keys(sectionTables)) {
+    const legacyRecords = Array.isArray(legacyContent[section]) ? legacyContent[section] : [];
+    imported[section] = 0;
+    for (const legacyRecord of legacyRecords) {
+      const label = (legacyRecord.title || legacyRecord.name || legacyRecord.displayName || legacyRecord.platform || "").trim().toLowerCase();
+      const duplicate = current[section].some((record) => {
+        if (legacyRecord.id && record.id === legacyRecord.id) return true;
+        if (section === "articles" && legacyRecord.slug && record.slug === legacyRecord.slug) return true;
+        const existingLabel = (record.title || record.name || record.displayName || record.platform || "").trim().toLowerCase();
+        return label && label === existingLabel && (!legacyRecord.location || legacyRecord.location === record.location);
+      });
+      if (duplicate) {
+        skipped += 1;
+        continue;
+      }
+
+      const id = legacyRecord.id && !current[section].some((record) => record.id === legacyRecord.id)
+        ? legacyRecord.id
+        : `${section}-${crypto.randomUUID()}`;
+      const record = { ...legacyRecord, id, published: legacyRecord.published !== false };
+      if (typeof record.image === "string" && record.image.startsWith("data:")) {
+        record.image = await uploadCmsImage(section, id, record.image);
+      }
+      const savedRecord = await saveCmsRecordInSupabase(section, record);
+      current[section].push(savedRecord);
+      imported[section] += 1;
+    }
+  }
+
+  for (const section of ["contact", "website"]) {
+    const legacyValue = legacyContent[section];
+    if (!legacyValue || typeof legacyValue !== "object") continue;
+    const table = section === "contact" ? "contact_info" : "website_settings";
+    const { data, error } = await supabase.from(table).select("id").eq("id", "default").maybeSingle();
+    if (error) throw error;
+    if (data) {
+      skipped += 1;
+      continue;
+    }
+    const migratedValue = { ...legacyValue };
+    if (section === "website") {
+      for (const key of ["heroImage", "aboutImage"]) {
+        if (typeof migratedValue[key] === "string" && migratedValue[key].startsWith("data:")) {
+          migratedValue[key] = await uploadCmsImage("website", key, migratedValue[key]);
+        }
       }
     }
-
-    const contentWithoutProperties = { ...content };
-    delete contentWithoutProperties.properties;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(contentWithoutProperties));
-  } catch (error) {
-    console.error("RENTORA content could not be saved in this browser.", error);
+    await saveCmsRecordInSupabase(section, migratedValue, { singleton: true });
+    imported[section] = 1;
   }
+
+  return { imported, skipped };
 }

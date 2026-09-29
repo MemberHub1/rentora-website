@@ -24,10 +24,9 @@ import {
 import "./App.css";
 import {
   loadContent,
-  loadPublishedPropertiesFromSupabase,
-  loadStoredPropertiesFallback,
-  saveContent,
+  loadPublishedCmsContentFromSupabase,
 } from "./contentStore";
+import { supabase } from "./lib/supabaseClient";
 import ArticlePage from "./pages/ArticlePage";
 import Contact from "./pages/Contact";
 import AboutUs from "./pages/AboutUs";
@@ -35,10 +34,21 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import AdminPage from "./pages/AdminPage";
 
-const whatsappUrl = (message = "Hello RENTORA, I am interested in a property.") => {
-  const contact = loadContent().contact;
+const whatsappUrl = (contact, message = "Hello RENTORA, I am interested in a property.") => {
   const baseUrl = contact.whatsappUrl || `https://wa.me/${(contact.whatsapp || contact.phone).replace(/\D/g, "")}`;
   return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(message)}`;
+};
+
+const publicSocialLinks = (contact, links) => {
+  const contactLinks = ["facebook", "instagram", "tiktok", "youtube"]
+    .filter((network) => contact[`${network}Url`])
+    .map((network) => ({ platform: network, displayName: network, url: contact[`${network}Url`] }));
+  if (contact.whatsappChannelUrl) {
+    contactLinks.push({ platform: "WhatsApp Channel", displayName: "WhatsApp Channel", url: contact.whatsappChannelUrl });
+  }
+  const uniqueUrls = new Set();
+  return [...contactLinks, ...links.filter((link) => link.published !== false)]
+    .filter((link) => link.url && !uniqueUrls.has(link.url) && uniqueUrls.add(link.url));
 };
 
 const articleSlugFromHash = () =>
@@ -56,6 +66,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [content, setContent] = useState(loadContent);
   const siteProperties = content.properties;
+  const websiteSocialLinks = publicSocialLinks(content.contact, content.socialLinks);
   const [favorites, setFavorites] = useState([]);
 
   const [searchData, setSearchData] = useState({
@@ -76,35 +87,32 @@ function App() {
   const [propertyLoadError, setPropertyLoadError] = useState("");
 
   useEffect(() => {
-    saveContent(content);
-  }, [content]);
-
-  useEffect(() => {
     if (currentPage === "admin") return undefined;
 
     let active = true;
 
-    const loadPublishedProperties = async () => {
+    const loadPublishedContent = async () => {
       try {
-        const supabaseProperties = await loadPublishedPropertiesFromSupabase();
-
+        const publishedContent = await loadPublishedCmsContentFromSupabase();
         if (!active) return;
 
-        const nextProperties = supabaseProperties ?? loadStoredPropertiesFallback();
-        setContent((current) => ({ ...current, properties: nextProperties }));
+        setContent(publishedContent);
         setPropertyLoadError("");
       } catch (error) {
-        console.error("Could not load published properties from Supabase.", error);
+        console.error("Could not load published website content from Supabase.", error);
         if (!active) return;
-        setContent((current) => ({ ...current, properties: loadStoredPropertiesFallback() }));
-        setPropertyLoadError("Using saved property data while Supabase is unavailable.");
+        setPropertyLoadError("Website content could not be loaded from Supabase. Check your connection and try again.");
       }
     };
 
-    loadPublishedProperties();
+    loadPublishedContent();
+    const channel = supabase?.channel("public-cms-content")
+      .on("postgres_changes", { event: "*", schema: "public" }, loadPublishedContent)
+      .subscribe();
 
     return () => {
       active = false;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [currentPage]);
 
@@ -195,6 +203,7 @@ function App() {
       }
     };
 
+    syncPageWithHash();
     window.addEventListener("hashchange", syncPageWithHash);
     window.addEventListener("popstate", syncPageWithHash);
     return () => {
@@ -252,7 +261,7 @@ function App() {
       .filter(Boolean)
       .join("\n");
 
-    window.open(whatsappUrl(message), "_blank", "noopener,noreferrer");
+    window.open(whatsappUrl(content.contact, message), "_blank", "noopener,noreferrer");
   };
 
   if (currentPage === "article" && selectedArticle) {
@@ -279,7 +288,7 @@ function App() {
   }
 
   if (currentPage === "contact") {
-    return <Contact contact={content.contact} website={content.website} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
+    return <Contact contact={content.contact} socialLinks={websiteSocialLinks} website={content.website} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
   }
 
   if (currentPage === "admin") {
@@ -435,7 +444,7 @@ function App() {
 
                   <a
                     className="gold-button"
-                    href={whatsappUrl(
+                    href={whatsappUrl(content.contact,
                       `Hello RENTORA, I am interested in ${selectedProperty.title}.`
                     )}
                     target="_blank"
@@ -1003,7 +1012,7 @@ function App() {
 
           <img
             className="hero-bg-image"
-            src="/assets/apartment-1.jpg"
+            src={content.website.heroImage || "/assets/apartment-1.jpg"}
             alt="Luxury apartment"
           />
 
@@ -1031,7 +1040,7 @@ function App() {
                 </a>
 
                 <a
-                  href={whatsappUrl()}
+                  href={whatsappUrl(content.contact)}
                   className="outline-button"
                   target="_blank"
                   rel="noreferrer"
@@ -1585,7 +1594,7 @@ function App() {
               <div className="about-main-card">
 
                 <img
-                  src="/assets/apartment-3.jpg"
+                  src={content.website.aboutImage || "/assets/apartment-3.jpg"}
                   alt="RENTORA property"
                 />
 
@@ -1683,7 +1692,7 @@ function App() {
               </div>
 
               <a
-                href={whatsappUrl()}
+                href={whatsappUrl(content.contact)}
                 className="gold-button"
                 target="_blank"
                 rel="noreferrer"
@@ -1791,7 +1800,7 @@ function App() {
                     className="agent-button"
                     href={agent.whatsapp
                       ? `https://wa.me/${agent.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(`Hello RENTORA, I would like to speak with ${agent.name}.`)}`
-                      : whatsappUrl(`Hello RENTORA, I would like to speak with ${agent.name}.`)}
+                      : whatsappUrl(content.contact, `Hello RENTORA, I would like to speak with ${agent.name}.`)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -2234,7 +2243,7 @@ function App() {
                   </a>
 
                   <a
-                    href={whatsappUrl()}
+                    href={whatsappUrl(content.contact)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -2519,8 +2528,8 @@ function App() {
             </a>
 
           <nav className="footer-social-links" aria-label="RENTORA social media">
-            {["facebook", "instagram", "tiktok", "youtube"].filter((network) => content.contact[`${network}Url`]).map((network) => (
-              <a key={network} href={content.contact[`${network}Url`]} target="_blank" rel="noreferrer">{network}</a>
+            {websiteSocialLinks.map((link) => (
+              <a key={link.id || link.url} href={link.url} target="_blank" rel="noreferrer">{link.displayName || link.platform}</a>
             ))}
           </nav>
 
