@@ -123,7 +123,7 @@ button {
 }
 
 .logo > span:last-child > span {
-  color: var(--champagne);
+  color: #D4AF37;
 }
 
 .logo-mark {
@@ -133,8 +133,9 @@ button {
   display: grid;
   place-items: center;
 
-  border: 1px solid var(--champagne);
-  color: var(--champagne);
+  border: 1px solid #D4AF37;
+  color: #D4AF37;
+  background: var(--navy);
 
   font-family: "Playfair Display", serif;
   font-size: 20px;
