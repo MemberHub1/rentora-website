@@ -118,6 +118,7 @@ function AdminPage({ content, onChange, onBackHome }) {
   const [sessionUserEmail, setSessionUserEmail] = useState("");
   const [adminSessionChecked, setAdminSessionChecked] = useState(false);
   const imageInputRef = useRef(null);
+  const isSupabaseReady = Boolean(supabase);
   const activeMeta = sections.find((section) => section.id === activeSection);
   const sectionItems = content[activeSection] ?? [];
   const isRecordSection = Boolean(emptyRecords[activeSection]);
@@ -125,7 +126,7 @@ function AdminPage({ content, onChange, onBackHome }) {
   const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
 
   const verifyAdminAuthorization = async (userId) => {
-    if (!userId) return false;
+    if (!userId || !supabase) return false;
 
     const { data, error } = await supabase
       .from("admin_users")
@@ -144,6 +145,16 @@ function AdminPage({ content, onChange, onBackHome }) {
     let active = true;
 
     const syncAdminSession = async () => {
+      if (!supabase) {
+        if (!active) return;
+        setIsAdminAuthenticated(false);
+        setSessionUserEmail("");
+        setAdminSessionChecked(true);
+        setIsCheckingAuth(false);
+        setAuthStatus("Supabase admin configuration is missing. Add the deployment env values to enable login.");
+        return;
+      }
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!active) return;
@@ -173,6 +184,12 @@ function AdminPage({ content, onChange, onBackHome }) {
     };
 
     syncAdminSession();
+
+    if (!supabase) {
+      return () => {
+        active = false;
+      };
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!active) return;
@@ -207,6 +224,13 @@ function AdminPage({ content, onChange, onBackHome }) {
 
   const signInAdmin = async (event) => {
     event.preventDefault();
+
+    if (!supabase) {
+      setAuthError("Supabase admin configuration is missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.");
+      setAuthStatus("Login unavailable.");
+      return;
+    }
+
     setAuthError("");
     setAuthStatus("Signing in...");
 
@@ -260,6 +284,15 @@ function AdminPage({ content, onChange, onBackHome }) {
   };
 
   const signOutAdmin = async () => {
+    if (!supabase) {
+      setIsAdminAuthenticated(false);
+      setSessionUserEmail("");
+      setNotice("Supabase configuration is not available.");
+      setAuthStatus("Signed out. Please configure the deployment env values.");
+      setAuthError("");
+      return;
+    }
+
     await supabase.auth.signOut();
     setIsAdminAuthenticated(false);
     setSessionUserEmail("");
@@ -462,17 +495,17 @@ function AdminPage({ content, onChange, onBackHome }) {
               <form onSubmit={signInAdmin} className="admin-form">
                 <label>
                   Email
-                  <input type="email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} placeholder="admin@rentora.com" required />
+                  <input type="email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} placeholder="admin@rentora.com" required disabled={!isSupabaseReady} />
                 </label>
                 <label>
                   Password
-                  <input type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="Enter your password" required />
+                  <input type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="Enter your password" required disabled={!isSupabaseReady} />
                 </label>
 
                 {authError && <p className="admin-notice" role="alert">{authError}</p>}
                 <p className="admin-notice" role="status">{authStatus}</p>
 
-                <button type="submit" className="gold-button admin-save"><Save size={18} /> Sign In</button>
+                <button type="submit" className="gold-button admin-save" disabled={!isSupabaseReady}><Save size={18} /> Sign In</button>
               </form>
             </section>
           </div>

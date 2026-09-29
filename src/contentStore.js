@@ -126,6 +126,10 @@ export function loadStoredPropertiesFallback() {
 }
 
 export async function loadPublishedPropertiesFromSupabase() {
+  if (!supabase) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("properties")
     .select("*")
