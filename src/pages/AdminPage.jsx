@@ -538,7 +538,7 @@ function AdminPage({ content, onChange, onBackHome }) {
           <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
           <div className="admin-user-actions">
             <span className="admin-label">{sessionUserEmail || "ADMIN"}</span>
-            <button className="gold-button admin-mobile-add" onClick={signOutAdmin} type="button"><X size={16} /> Logout</button>
+            <button className="gold-button admin-logout-button" onClick={signOutAdmin} type="button"><X size={16} /> Logout</button>
           </div>
         </div>
       </header>

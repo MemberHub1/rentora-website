@@ -3045,6 +3045,9 @@ a.contact-info-card:hover {
 .admin-page { min-height: 100vh; background: var(--cream, #f8f6f1); }
 .admin-nav { display: flex; align-items: center; gap: 18px; }
 .admin-label { margin-left: auto; font-size: 11px; letter-spacing: .18em; font-weight: 700; opacity: .7; }
+.admin-user-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; min-width: 0; }
+.admin-user-actions .admin-label { max-width: min(38vw, 360px); margin-left: 0; overflow-wrap: anywhere; }
+.admin-logout-button { flex: none; min-height: 40px; padding: 0 12px; }
 .admin-main { padding: 72px 0 100px; }
 .admin-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 30px; margin-bottom: 42px; }
 .admin-heading h1 { margin: 8px 0 10px; }
@@ -3150,6 +3153,10 @@ a.contact-info-card:hover {
   .admin-record-list { max-height: 520px; }
 }
 @media (max-width: 760px) {
+  .admin-page .header { height: auto; min-height: 70px; padding: 10px 0; }
+  .admin-page .admin-nav { flex-wrap: wrap; gap: 10px; }
+  .admin-user-actions { width: 100%; justify-content: flex-end; }
+  .admin-user-actions .admin-label { display: block; max-width: calc(100% - 105px); }
   .admin-main { padding: 30px 0 60px; }
   .admin-shell { grid-template-columns: 1fr; gap: 18px; }
   .admin-sidebar { display: flex; gap: 5px; overflow-x: auto; padding: 8px; }
