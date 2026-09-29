@@ -4,6 +4,7 @@ function PageLayout({
   eyebrow,
   title,
   subtitle,
+  footerText,
   onNavigateHome,
   contentClassName = "",
   children,
@@ -41,7 +42,7 @@ function PageLayout({
 
       <footer className="footer">
         <div className="container footer-bottom">
-          <p>© 2026 RENTORA. All rights reserved.</p>
+          <p>{footerText || "© 2026 RENTORA. All rights reserved."}</p>
           <button className="footer-page-button" onClick={onNavigateHome}>
             Back to Home
           </button>

@@ -52,7 +52,7 @@ const sections = [
   },
 ];
 
-function PrivacyPolicy({ onNavigateHome }) {
+function PrivacyPolicy({ contact, footerText, onNavigateHome }) {
   return (
     <PageLayout
       eyebrow="YOUR INFORMATION"
@@ -60,6 +60,7 @@ function PrivacyPolicy({ onNavigateHome }) {
       subtitle="A clear overview of how information is handled when you use RENTORA."
       onNavigateHome={onNavigateHome}
       contentClassName="legal-content"
+      footerText={footerText}
     >
       <article className="legal-document">
         <p className="last-updated">Last Updated: September 29, 2026</p>
@@ -73,11 +74,11 @@ function PrivacyPolicy({ onNavigateHome }) {
           <h2>Contact Us</h2>
           <p>
             For questions about this policy or information you have shared
-            directly with RENTORA, contact us at support@rentora.com.
+            directly with RENTORA, contact us at {contact.email}.
           </p>
-          <a className="text-link" href="mailto:support@rentora.com">
+          <a className="text-link" href={`mailto:${contact.email}`}>
             <Mail size={17} />
-            support@rentora.com
+            {contact.email}
           </a>
         </section>
       </article>

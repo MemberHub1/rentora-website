@@ -1,3 +1,340 @@
+import { useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Building2,
+  FileText,
+  Globe2,
+  ImagePlus,
+  MapPin,
+  Phone,
+  Plus,
+  Save,
+  Settings2,
+  ShieldCheck,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+
+const sections = [
+  { id: "properties", label: "Properties", icon: Building2 },
+  { id: "locations", label: "Locations", icon: MapPin },
+  { id: "articles", label: "Articles & Tips", icon: FileText },
+  { id: "team", label: "Our Team", icon: Users },
+  { id: "contact", label: "Contact Information", icon: Phone },
+  { id: "website", label: "Website Content", icon: Globe2 },
+];
+
+const fieldDefinitions = {
+  properties: [
+    { key: "title", label: "Property Title", required: true },
+    { key: "location", label: "Location", required: true },
+    { key: "price", label: "Price", required: true },
+    { key: "type", label: "Type", type: "select", options: ["Apartment", "House", "Plot", "Commercial"] },
+    { key: "purpose", label: "Purpose", type: "select", options: ["For Rent", "For Sale"] },
+    { key: "beds", label: "Bedrooms", type: "number" },
+    { key: "baths", label: "Bathrooms", type: "number" },
+    { key: "area", label: "Area" },
+    { key: "description", label: "Description", type: "textarea", wide: true },
+  ],
+  locations: [
+    { key: "title", label: "Location Name", required: true },
+    { key: "shortDescription", label: "Short Description", type: "textarea", wide: true },
+    { key: "propertyCount", label: "Property Count", type: "number" },
+  ],
+  articles: [
+    { key: "title", label: "Article Title", required: true },
+    { key: "shortDescription", label: "Short Description", type: "textarea", wide: true },
+    { key: "content", label: "Full Content", type: "textarea", wide: true, rows: 8 },
+    { key: "date", label: "Date", type: "date" },
+    { key: "author", label: "Author" },
+  ],
+  team: [
+    { key: "name", label: "Name", required: true },
+    { key: "role", label: "Job Title / Designation", required: true },
+    { key: "phone", label: "Phone", type: "tel" },
+    { key: "whatsapp", label: "WhatsApp", type: "tel" },
+    { key: "email", label: "Email", type: "email" },
+    { key: "bio", label: "Short Bio", type: "textarea", wide: true },
+    { key: "facebookUrl", label: "Facebook URL", type: "url" },
+    { key: "instagramUrl", label: "Instagram URL", type: "url" },
+    { key: "linkedinUrl", label: "LinkedIn URL", type: "url" },
+  ],
+};
+
+const contactFields = [
+  { key: "phone", label: "Company Phone", type: "tel" },
+  { key: "whatsapp", label: "WhatsApp Number", type: "tel" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "address", label: "Office Address", type: "textarea", wide: true },
+  { key: "mapsUrl", label: "Google Maps Link", type: "url", wide: true },
+  { key: "businessHours", label: "Business Hours", type: "textarea", wide: true },
+  { key: "facebookUrl", label: "Facebook URL", type: "url" },
+  { key: "instagramUrl", label: "Instagram URL", type: "url" },
+  { key: "tiktokUrl", label: "TikTok URL", type: "url" },
+  { key: "youtubeUrl", label: "YouTube URL", type: "url" },
+  { key: "whatsappUrl", label: "WhatsApp URL", type: "url", wide: true },
+];
+
+const websiteFields = [
+  { key: "heroHeading", label: "Hero Heading", type: "textarea", wide: true },
+  { key: "heroSubtitle", label: "Hero Subtitle", type: "textarea", wide: true },
+  { key: "aboutHeading", label: "About Us Heading", type: "textarea", wide: true },
+  { key: "aboutDescription", label: "About Us Description", type: "textarea", wide: true, rows: 6 },
+  { key: "footerText", label: "Footer Text", type: "textarea", wide: true },
+  { key: "tagline", label: "Company Tagline", wide: true },
+];
+
+const emptyRecords = {
+  properties: { title: "", location: "", price: "", type: "Apartment", purpose: "For Rent", beds: 1, baths: 1, area: "", description: "", image: "", published: true },
+  locations: { title: "", shortDescription: "", image: "", published: true },
+  articles: { title: "", shortDescription: "", content: "", date: new Date().toISOString().slice(0, 10), author: "", image: "", published: true },
+  team: { name: "", role: "", phone: "", whatsapp: "", email: "", bio: "", facebookUrl: "", instagramUrl: "", linkedinUrl: "", image: "", published: true },
+};
+
+const labels = {
+  properties: "property",
+  locations: "location",
+  articles: "article",
+  team: "team member",
+};
+const pluralLabels = { properties: "properties", locations: "locations", articles: "articles", team: "team members" };
+
+const slugify = (value) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+function AdminPage({ content, onChange, onBackHome }) {
+  const [activeSection, setActiveSection] = useState("properties");
+  const [form, setForm] = useState(emptyRecords.properties);
+  const [editingId, setEditingId] = useState(null);
+  const [imageName, setImageName] = useState("");
+  const [imageError, setImageError] = useState("");
+  const [notice, setNotice] = useState("");
+  const imageInputRef = useRef(null);
+  const activeMeta = sections.find((section) => section.id === activeSection);
+  const sectionItems = content[activeSection] ?? [];
+  const isRecordSection = Boolean(emptyRecords[activeSection]);
+  const fields = fieldDefinitions[activeSection] ?? [];
+  const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
+
+  const selectSection = (sectionId) => {
+    setActiveSection(sectionId);
+    setEditingId(null);
+    setForm(emptyRecords[sectionId] || content[sectionId] || {});
+    setImageName("");
+    setImageError("");
+    setNotice("");
+  };
+
+  const startNewRecord = () => {
+    setEditingId(null);
+    setForm({ ...emptyRecords[activeSection], date: new Date().toISOString().slice(0, 10) });
+    setImageName("");
+    setImageError("");
+  };
+
+  const editRecord = (record) => {
+    setEditingId(record.id);
+    setForm({ ...emptyRecords[activeSection], ...record });
+    setImageName("");
+    setImageError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const validType = ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
+    if (!validType) {
+      setImageError("Please select a JPG, JPEG, PNG or WEBP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("Image must be 5 MB or smaller.");
+      return;
+    }
+    const optimizeImage = async () => {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const optimizedImage = await new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Image compression failed.")), "image/webp", 0.78);
+        });
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result !== "string") {
+            setImageError("This image could not be read. Please try another file.");
+            return;
+          }
+          updateForm("image", reader.result);
+          setImageName(file.name);
+          setImageError("");
+        };
+        reader.onerror = () => setImageError("This image could not be read. Please try another file.");
+        reader.readAsDataURL(optimizedImage);
+      } catch {
+        setImageError("This image could not be processed. Please try another file.");
+      }
+    };
+    optimizeImage();
+  };
+
+  const saveRecord = (event) => {
+    event.preventDefault();
+    if (activeSection === "properties" && !form.image) {
+      setImageError("Please upload a property image before saving.");
+      return;
+    }
+    const title = form.title || form.name;
+    const id = editingId || `${activeSection}-${Date.now()}`;
+    const record = {
+      ...form,
+      id,
+      ...(activeSection === "articles" ? { slug: slugify(title), excerpt: form.shortDescription } : {}),
+      ...(activeSection === "locations" ? { description: form.shortDescription } : {}),
+      ...(activeSection === "properties" ? { beds: Number(form.beds) || 0, baths: Number(form.baths) || 0 } : {}),
+    };
+    const nextItems = editingId
+      ? sectionItems.map((item) => item.id === editingId ? record : item)
+      : [record, ...sectionItems];
+    onChange({ ...content, [activeSection]: nextItems });
+    setNotice(`${labels[activeSection]} ${editingId ? "updated" : "added"}.`);
+    startNewRecord();
+  };
+
+  const deleteRecord = (id) => {
+    if (!window.confirm(`Delete this ${labels[activeSection]}?`)) return;
+    onChange({ ...content, [activeSection]: sectionItems.filter((item) => item.id !== id) });
+    if (editingId === id) startNewRecord();
+  };
+
+  const togglePublished = (record) => {
+    onChange({
+      ...content,
+      [activeSection]: sectionItems.map((item) => item.id === record.id ? { ...item, published: !item.published } : item),
+    });
+  };
+
+  const saveSettings = (event) => {
+    event.preventDefault();
+    onChange({ ...content, [activeSection]: form });
+    setNotice(`${activeMeta.label} saved.`);
+  };
+
+  const renderFields = (definitions) => definitions.map((field) => (
+    <label className={field.wide ? "admin-field-wide" : ""} key={field.key}>
+      {field.label}
+      {field.type === "textarea" ? (
+        <textarea rows={field.rows || 4} value={form[field.key] ?? ""} onChange={(event) => updateForm(field.key, event.target.value)} required={field.required} />
+      ) : field.type === "select" ? (
+        <select value={form[field.key] ?? field.options[0]} onChange={(event) => updateForm(field.key, event.target.value)}>
+          {field.options.map((option) => <option key={option}>{option}</option>)}
+        </select>
+      ) : (
+        <input type={field.type || "text"} min={field.type === "number" ? "0" : undefined} value={form[field.key] ?? ""} onChange={(event) => updateForm(field.key, event.target.value)} required={field.required} />
+      )}
+    </label>
+  ));
+
+  return (
+    <div className="site admin-page">
+      <header className="header">
+        <div className="container nav-container admin-nav">
+          <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
+          <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
+          <span className="admin-label">CONTENT MANAGEMENT</span>
+        </div>
+      </header>
+
+      <main className="admin-main">
+        <div className="container">
+          <div className="admin-heading">
+            <div><span className="section-label">RENTORA MANAGEMENT</span><h1>Website CMS</h1><p>Manage your listings and the content visitors see across RENTORA.</p></div>
+            {isRecordSection && <button className="gold-button" onClick={startNewRecord}><Plus size={18} /> Add {labels[activeSection]}</button>}
+          </div>
+
+          <div className="admin-shell">
+            <aside className="admin-sidebar" aria-label="CMS sections">
+              <span className="admin-sidebar-label">MANAGE WEBSITE</span>
+              {sections.map(({ id, label, icon: Icon }) => (
+                <button key={id} className={`admin-nav-item ${activeSection === id ? "active" : ""}`} onClick={() => selectSection(id)}>
+                  <Icon size={18} /><span>{label}</span>{id in content && Array.isArray(content[id]) && <small>{content[id].length}</small>}
+                </button>
+              ))}
+              <div className="admin-sidebar-note"><ShieldCheck size={17} /><span>Changes are saved in this browser.</span></div>
+            </aside>
+
+            <section className="admin-workspace">
+              <div className="admin-workspace-heading">
+                <div><span className="section-label">CONTENT</span><h2>{activeMeta.label}</h2><p>{isRecordSection ? `${sectionItems.length} ${pluralLabels[activeSection]} in your library` : "Edit the information shown on your website."}</p></div>
+                {isRecordSection && <button className="gold-button admin-mobile-add" onClick={startNewRecord}><Plus size={17} /> Add</button>}
+              </div>
+
+              {notice && <p className="admin-notice" role="status">{notice}</p>}
+
+              {isRecordSection ? (
+                <div className="admin-content-grid">
+                  <section className="admin-form-card">
+                    <div className="admin-card-heading">
+                      <div><h3>{editingId ? `Edit ${labels[activeSection]}` : `Add ${labels[activeSection]}`}</h3><p>{editingId ? "Update this entry and save your changes." : "Add a new entry to your website."}</p></div>
+                      {editingId && <button className="icon-button" onClick={startNewRecord} aria-label="Cancel edit"><X size={18} /></button>}
+                    </div>
+                    <form onSubmit={saveRecord} className="admin-form">
+                      <div className="admin-fields-grid">{renderFields(fields)}</div>
+                      <div className="admin-upload-field">
+                        <span className="admin-upload-label">{activeSection === "team" ? "Profile Photo" : activeSection === "articles" ? "Article Image" : activeSection === "locations" ? "Location Image" : "Property Image"}</span>
+                        <input ref={imageInputRef} className="admin-file-input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handleImageUpload} aria-label="Upload image" />
+                        <button type="button" className="gold-button admin-upload-button" onClick={() => imageInputRef.current?.click()}><ImagePlus size={18} /> Upload Image</button>
+                        <span className="admin-upload-hint">JPG, JPEG, PNG or WEBP, up to 5 MB</span>
+                        {imageError && <span className="admin-image-error" role="alert">{imageError}</span>}
+                      </div>
+                      {imagePreview && <div className="admin-image-preview"><img src={imagePreview} alt="Selected image preview" /><div className="admin-image-details"><span><ImagePlus size={16} /> {imageName || "Current image"}</span><button type="button" className="admin-remove-image" onClick={() => { updateForm("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button></div></div>}
+                      <label className="admin-publish-toggle"><input type="checkbox" checked={Boolean(form.published)} onChange={(event) => updateForm("published", event.target.checked)} /><span>Published on website</span></label>
+                      <button type="submit" className="gold-button admin-save"><Save size={18} /> {editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
+                    </form>
+                  </section>
+
+                  <section className="admin-list-card">
+                    <div className="admin-card-heading"><div><h3>All {activeMeta.label}</h3><p>Choose an entry to update it or change its visibility.</p></div></div>
+                    <div className="admin-record-list">
+                      {sectionItems.length === 0 && <p className="admin-empty">No entries yet. Add your first {labels[activeSection]} to get started.</p>}
+                      {sectionItems.map((record) => {
+                        const recordTitle = record.title || record.name;
+                        return <article className="admin-record-row" key={record.id}>
+                          {record.image ? <img src={record.image} alt="" /> : <span className="admin-record-placeholder"><activeMeta.icon size={19} /></span>}
+                          <div className="admin-record-info"><strong>{recordTitle}</strong><span>{record.location || record.role || record.shortDescription || record.price || record.author || "RENTORA content"}</span><small className={record.published ? "published" : "unpublished"}>{record.published ? "Published" : "Unpublished"}</small></div>
+                          <div className="admin-record-actions"><button className="admin-text-action" onClick={() => togglePublished(record)}>{record.published ? "Unpublish" : "Publish"}</button><button className="icon-button" onClick={() => editRecord(record)} aria-label={`Edit ${recordTitle}`}><Settings2 size={17} /></button><button className="icon-button danger" onClick={() => deleteRecord(record.id)} aria-label={`Delete ${recordTitle}`}><Trash2 size={17} /></button></div>
+                        </article>;
+                      })}
+                    </div>
+                  </section>
+                </div>
+              ) : (
+                <section className="admin-settings-card">
+                  <div className="admin-card-heading"><div><h3>{activeMeta.label}</h3><p>These values are used throughout the public website.</p></div></div>
+                  <form className="admin-form" onSubmit={saveSettings}>
+                    <div className="admin-fields-grid">{renderFields(activeSection === "contact" ? contactFields : websiteFields)}</div>
+                    <button className="gold-button admin-save" type="submit"><Save size={18} /> Save {activeMeta.label}</button>
+                  </form>
+                </section>
+              )}
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default AdminPage;
+/*
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Edit3, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
 
@@ -188,3 +525,4 @@ function AdminPage({ properties, editingProperty, onEdit, onDelete, onSave, onBa
 }
 
 export default AdminPage;
+*/

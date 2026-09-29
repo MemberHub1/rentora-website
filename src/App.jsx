@@ -22,9 +22,7 @@ import {
 } from "lucide-react";
 
 import "./App.css";
-import { projects, properties as defaultProperties } from "./properties";
-import { googleMapsUrl, officeLocation } from "./contactDetails";
-import { articles } from "./articles";
+import { loadContent, saveContent } from "./contentStore";
 import ArticlePage from "./pages/ArticlePage";
 import Contact from "./pages/Contact";
 import AboutUs from "./pages/AboutUs";
@@ -32,33 +30,18 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import AdminPage from "./pages/AdminPage";
 
-const agents = [
-  {
-    name: "Property Consultant",
-    role: "Senior Property Consultant",
-    initials: "PC",
-  },
-  {
-    name: "Sales Consultant",
-    role: "Real Estate Advisor",
-    initials: "SC",
-  },
-  {
-    name: "Investment Advisor",
-    role: "Property Investment Specialist",
-    initials: "IA",
-  },
-];
-
-const whatsappUrl = (message = "Hello RENTORA, I am interested in a property.") =>
-  `https://wa.me/923187630194?text=${encodeURIComponent(message)}`;
+const whatsappUrl = (message = "Hello RENTORA, I am interested in a property.") => {
+  const contact = loadContent().contact;
+  const baseUrl = contact.whatsappUrl || `https://wa.me/${(contact.whatsapp || contact.phone).replace(/\D/g, "")}`;
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(message)}`;
+};
 
 const articleSlugFromHash = () =>
   window.location.hash.match(/^#article\/([^/]+)$/)?.[1] ?? null;
 
-const pageFromHash = () => {
+const pageFromHash = (availableArticles) => {
   const page = window.location.hash.slice(1);
-  if (articles.some((article) => article.slug === articleSlugFromHash())) {
+  if (availableArticles.some((article) => article.slug === articleSlugFromHash() && article.published !== false)) {
     return "article";
   }
   return ["about", "privacy", "terms", "contact", "admin"].includes(page) ? page : "home";
@@ -66,17 +49,9 @@ const pageFromHash = () => {
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
-
+  const [content, setContent] = useState(loadContent);
+  const siteProperties = content.properties;
   const [favorites, setFavorites] = useState([]);
-
-  const [siteProperties, setSiteProperties] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem("rentora-properties");
-      return saved ? JSON.parse(saved) : defaultProperties;
-    } catch {
-      return defaultProperties;
-    }
-  });
 
   const [searchData, setSearchData] = useState({
     location: "",
@@ -86,34 +61,16 @@ function App() {
   });
   const [submittedSearch, setSubmittedSearch] = useState(null);
 
-  const [currentPage, setCurrentPage] = useState(pageFromHash);
+  const [currentPage, setCurrentPage] = useState(() => pageFromHash(content.articles));
 
   const [selectedArticle, setSelectedArticle] = useState(() =>
-    articles.find((article) => article.slug === articleSlugFromHash()) ?? null
+    content.articles.find((article) => article.slug === articleSlugFromHash() && article.published !== false) ?? null
   );
 
   const [selectedProperty, setSelectedProperty] = useState(null);
-  const [editingProperty, setEditingProperty] = useState(null);
-
   useEffect(() => {
-    window.localStorage.setItem("rentora-properties", JSON.stringify(siteProperties));
-  }, [siteProperties]);
-
-  const saveProperty = (property) => {
-    setSiteProperties((current) => {
-      const exists = current.some((item) => item.id === property.id);
-      return exists
-        ? current.map((item) => (item.id === property.id ? property : item))
-        : [property, ...current];
-    });
-    setEditingProperty(null);
-  };
-
-  const deleteProperty = (id) => {
-    if (window.confirm("Delete this property from RENTORA?")) {
-      setSiteProperties((current) => current.filter((item) => item.id !== id));
-    }
-  };
+    saveContent(content);
+  }, [content]);
 
   /* =========================
      FAVORITES
@@ -182,8 +139,8 @@ function App() {
   useEffect(() => {
     const syncPageWithHash = () => {
       const hash = window.location.hash.slice(1);
-      const article = articles.find(
-        (item) => item.slug === articleSlugFromHash()
+      const article = content.articles.find(
+        (item) => item.slug === articleSlugFromHash() && item.published !== false
       );
 
       if (article) {
@@ -204,7 +161,7 @@ function App() {
       window.removeEventListener("hashchange", syncPageWithHash);
       window.removeEventListener("popstate", syncPageWithHash);
     };
-  }, []);
+  }, [content.articles]);
 
   /* =========================
      OPEN PROPERTY DETAILS
@@ -220,6 +177,7 @@ function App() {
   };
 
   const visibleProperties = siteProperties.filter((property) => {
+    if (property.published === false) return false;
     if (!submittedSearch) return true;
 
     const price = Number(property.price.replace(/[^\d]/g, ""));
@@ -261,6 +219,7 @@ function App() {
     return (
       <ArticlePage
         article={selectedArticle}
+        footerText={content.website.footerText}
         onNavigateHome={() => navigateToPage("home")}
         onNavigateArticles={navigateToArticles}
       />
@@ -268,29 +227,26 @@ function App() {
   }
 
   if (currentPage === "about") {
-    return <AboutUs onNavigateHome={() => navigateToPage("home")} />;
+    return <AboutUs website={content.website} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
   }
 
   if (currentPage === "privacy") {
-    return <PrivacyPolicy onNavigateHome={() => navigateToPage("home")} />;
+    return <PrivacyPolicy contact={content.contact} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
   }
 
   if (currentPage === "terms") {
-    return <TermsConditions onNavigateHome={() => navigateToPage("home")} />;
+    return <TermsConditions contact={content.contact} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
   }
 
   if (currentPage === "contact") {
-    return <Contact onNavigateHome={() => navigateToPage("home")} />;
+    return <Contact contact={content.contact} website={content.website} footerText={content.website.footerText} onNavigateHome={() => navigateToPage("home")} />;
   }
 
   if (currentPage === "admin") {
     return (
       <AdminPage
-        properties={siteProperties}
-        editingProperty={editingProperty}
-        onEdit={setEditingProperty}
-        onDelete={deleteProperty}
-        onSave={saveProperty}
+        content={content}
+        onChange={setContent}
         onBackHome={() => navigateToPage("home")}
       />
     );
@@ -416,14 +372,7 @@ function App() {
                   <h2>Property Details</h2>
 
                   <p>
-                    This beautiful{" "}
-                    {selectedProperty.type.toLowerCase()}{" "}
-                    is located in{" "}
-                    {selectedProperty.location}.
-                    It offers a comfortable living
-                    environment with modern features
-                    and convenient access to important
-                    areas of Lahore.
+                    {selectedProperty.description || `This ${selectedProperty.type.toLowerCase()} is located in ${selectedProperty.location}. Contact RENTORA for availability and viewing details.`}
                   </p>
 
                   <p>
@@ -572,7 +521,7 @@ function App() {
           <div className="container footer-bottom">
 
             <p>
-              © 2026 RENTORA. All rights reserved.
+              {content.website.footerText}
             </p>
 
             <button
@@ -710,7 +659,7 @@ function App() {
 
             <div className="property-grid">
 
-              {siteProperties
+              {visibleProperties
                 .filter(
                   (property) =>
                     property.type === "Apartment"
@@ -847,7 +796,7 @@ function App() {
           <div className="container footer-bottom">
 
             <p>
-              © 2026 RENTORA. All rights reserved.
+              {content.website.footerText}
             </p>
 
             <button
@@ -1025,17 +974,9 @@ function App() {
 
             <div className="hero-text">
 
-              <h1>
-                Find Your <strong>Perfect Place.</strong>
-                <br />
-                Live Better.
-              </h1>
+              <h1>{content.website.heroHeading}</h1>
 
-              <p>
-                Discover premium apartments,
-                houses, plots and commercial
-                properties in Lahore with RENTORA.
-              </p>
+              <p>{content.website.heroSubtitle}</p>
 
               <div className="hero-actions">
 
@@ -1538,15 +1479,15 @@ function App() {
 
             <div className="project-grid">
 
-              {projects.map((project) => (
+              {content.locations.filter((location) => location.published !== false).map((project) => (
 
                 <article
                   className="project-card"
-                  key={project.title}
+                    key={project.id || project.title}
                 >
 
                   <img
-                    src={project.image}
+                    src={project.image || "/assets/apartment-1.jpg"}
                     alt={project.title}
                   />
 
@@ -1560,9 +1501,10 @@ function App() {
                       {project.title}
                     </h3>
 
-                    <p>
-                      {project.description}
-                    </p>
+                    <p>{project.shortDescription || project.description}</p>
+                    <small className="project-property-count">
+                      {project.propertyCount ?? siteProperties.filter((property) => property.published !== false && property.location.toLowerCase().includes(project.title.toLowerCase())).length} properties
+                    </small>
 
                     <button
                       onClick={() => {
@@ -1628,26 +1570,9 @@ function App() {
                 WHY RENTORA
               </span>
 
-              <h2>
+              <h2>{content.website.aboutHeading}</h2>
 
-                More Than a Property.
-
-                <br />
-
-                <span>
-                  A Better Way to Find Home.
-                </span>
-
-              </h2>
-
-              <p>
-                RENTORA makes property searching
-                simple, professional and convenient.
-                Whether you're looking to rent, buy
-                or invest, we help you discover
-                properties that match your
-                requirements.
-              </p>
+              <p className="managed-about-description">{content.website.aboutDescription}</p>
 
               <div className="feature-list">
 
@@ -1762,24 +1687,23 @@ function App() {
 
             <div className="agents-grid">
 
-              {agents.map((agent) => (
+              {content.team.filter((agent) => agent.published !== false).map((agent) => (
 
                 <article
                   className="agent-card"
-                  key={agent.name}
+                  key={agent.id || agent.name}
                 >
 
                   <div className="agent-avatar">
-                    {agent.initials}
+                    {agent.image ? <img src={agent.image} alt={agent.name} /> : agent.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
 
                   <h3>
                     {agent.name}
                   </h3>
 
-                  <p>
-                    {agent.role}
-                  </p>
+                  <p>{agent.role}</p>
+                  {agent.bio && <p className="agent-bio">{agent.bio}</p>}
 
                   <div className="agent-stars">
 
@@ -1810,11 +1734,23 @@ function App() {
 
                   </div>
 
+                  {(agent.phone || agent.email || agent.facebookUrl || agent.instagramUrl || agent.linkedinUrl) && (
+                    <div className="agent-contact-details">
+                      {agent.phone && <a href={`tel:${agent.phone.replace(/\s/g, "")}`}>{agent.phone}</a>}
+                      {agent.email && <a href={`mailto:${agent.email}`}>{agent.email}</a>}
+                      <div>
+                        {["facebook", "instagram", "linkedin"].filter((network) => agent[`${network}Url`]).map((network) => (
+                          <a key={network} href={agent[`${network}Url`]} target="_blank" rel="noreferrer">{network}</a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <a
                     className="agent-button"
-                    href={whatsappUrl(
-                      `Hello RENTORA, I would like to speak with ${agent.name}.`
-                    )}
+                    href={agent.whatsapp
+                      ? `https://wa.me/${agent.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(`Hello RENTORA, I would like to speak with ${agent.name}.`)}`
+                      : whatsappUrl(`Hello RENTORA, I would like to speak with ${agent.name}.`)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -2005,6 +1941,24 @@ function App() {
 
             <div className="blog-grid">
 
+              {content.articles.filter((article) => article.published !== false).map((article) => (
+                <article className="blog-card" key={article.id || article.slug}>
+                  <div className="blog-image">
+                    <img src={article.image || "/assets/apartment-1.jpg"} alt={article.title} />
+                    <span>{article.category || "PROPERTY GUIDE"}</span>
+                  </div>
+                  <div className="blog-content">
+                    <small>{article.author || "RENTORA"}</small>
+                    <h3>{article.title}</h3>
+                    <p>{article.shortDescription || article.excerpt}</p>
+                    <a href={`#article/${article.slug}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>
+                      Read Article <ArrowRight size={15} />
+                    </a>
+                  </div>
+                </article>
+              ))}
+
+              {content.articles.length < 0 && <>
               <article className="blog-card">
 
                 <div className="blog-image">
@@ -2186,6 +2140,7 @@ function App() {
                 </div>
 
               </article>
+              </>}
 
             </div>
 
@@ -2232,9 +2187,9 @@ function App() {
 
                 <div className="contact-points">
 
-                  <a href="tel:+923187630194">
+                  <a href={`tel:${content.contact.phone.replace(/\s/g, "")}`}>
                     <Phone size={18} />
-                    <span>+92 318 7630194</span>
+                    <span>{content.contact.phone}</span>
                   </a>
 
                   <a
@@ -2247,13 +2202,13 @@ function App() {
                   </a>
 
                   <a
-                    href={googleMapsUrl}
+                    href={content.contact.mapsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`Open ${officeLocation} in Google Maps`}
+                    aria-label={`Open ${content.contact.address} in Google Maps`}
                   >
                     <MapPin size={18} />
-                    <span>{officeLocation}</span>
+                    <span>{content.contact.address}</span>
                   </a>
 
                 </div>
@@ -2382,19 +2337,14 @@ function App() {
 
             </button>
 
-            <p>
-              A modern real-estate platform
-              designed to help you discover
-              apartments, houses, plots and
-              commercial properties in Lahore.
-            </p>
+            <p>{content.website.footerText}</p>
 
             <div className="footer-badge">
 
               <Award size={18} />
 
               <span>
-                Property Made Simple
+                {content.website.tagline}
               </span>
 
             </div>
@@ -2466,25 +2416,9 @@ function App() {
               Property Areas
             </h4>
 
-            <a href="#projects">
-              DHA Lahore
-            </a>
-
-            <a href="#projects">
-              Bahria Town
-            </a>
-
-            <a href="#projects">
-              Gulberg
-            </a>
-
-            <a href="#projects">
-              Al Ghani Garden
-            </a>
-
-            <a href="#projects">
-              Royal Swiss City
-            </a>
+            {content.locations.filter((location) => location.published !== false).map((location) => (
+              <a href="#projects" key={location.id || location.title}>{location.title}</a>
+            ))}
 
           </div>
 
@@ -2501,11 +2435,11 @@ function App() {
 
               <Phone size={15} />
 
-              Contact RENTORA
+              {content.contact.phone}
 
             </a>
 
-            <a href="mailto:support@rentora.com">
+            <a href={`mailto:${content.contact.email}`}>
 
               <Mail size={15} />
 
@@ -2514,17 +2448,19 @@ function App() {
             </a>
 
             <a
-              href={googleMapsUrl}
+              href={content.contact.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              aria-label={`Open ${officeLocation} in Google Maps`}
+              aria-label={`Open ${content.contact.address} in Google Maps`}
             >
 
               <MapPin size={15} />
 
-              {officeLocation}
+              {content.contact.address}
 
             </a>
+
+            <span className="footer-business-hours">{content.contact.businessHours}</span>
 
             <a
               href="#contact"
@@ -2541,6 +2477,12 @@ function App() {
 
             </a>
 
+          <nav className="footer-social-links" aria-label="RENTORA social media">
+            {["facebook", "instagram", "tiktok", "youtube"].filter((network) => content.contact[`${network}Url`]).map((network) => (
+              <a key={network} href={content.contact[`${network}Url`]} target="_blank" rel="noreferrer">{network}</a>
+            ))}
+          </nav>
+
           </div>
 
         </div>
@@ -2548,7 +2490,7 @@ function App() {
         <div className="container footer-bottom">
 
           <p>
-            © 2026 RENTORA. All rights reserved.
+            {content.website.footerText}
           </p>
 
           <div>

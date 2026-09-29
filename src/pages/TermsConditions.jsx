@@ -52,7 +52,7 @@ const sections = [
   },
 ];
 
-function TermsConditions({ onNavigateHome }) {
+function TermsConditions({ contact, footerText, onNavigateHome }) {
   return (
     <PageLayout
       eyebrow="WEBSITE TERMS"
@@ -60,6 +60,7 @@ function TermsConditions({ onNavigateHome }) {
       subtitle="Please review these terms before using RENTORA's website and property information."
       onNavigateHome={onNavigateHome}
       contentClassName="legal-content"
+      footerText={footerText}
     >
       <article className="legal-document">
         <p className="last-updated">Last Updated: September 29, 2026</p>
@@ -73,11 +74,11 @@ function TermsConditions({ onNavigateHome }) {
           <h2>Contact Information</h2>
           <p>
             If you have a question about these terms, contact RENTORA at
-            support@rentora.com.
+            {contact.email}.
           </p>
-          <a className="text-link" href="mailto:support@rentora.com">
+          <a className="text-link" href={`mailto:${contact.email}`}>
             <Mail size={17} />
-            support@rentora.com
+            {contact.email}
           </a>
         </section>
       </article>

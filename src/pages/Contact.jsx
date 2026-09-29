@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { Mail, MapPin, MessageCircle } from "lucide-react";
-import { googleMapsUrl, officeLocation } from "../contactDetails";
+import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import PageLayout from "./PageLayout";
 
-const whatsappUrl = "https://wa.me/923187630194";
 const defaultWhatsAppMessage = "Hello RENTORA, I am interested in a property.";
 const initialForm = {
   fullName: "",
@@ -13,10 +11,12 @@ const initialForm = {
   message: "",
 };
 
-function Contact({ onNavigateHome }) {
+function Contact({ contact, website, footerText, onNavigateHome }) {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const whatsappUrl = contact.whatsappUrl || `https://wa.me/${(contact.whatsapp || contact.phone).replace(/\D/g, "")}`;
+  const withWhatsAppMessage = (message) => `${whatsappUrl}${whatsappUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(message)}`;
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -59,14 +59,14 @@ function Contact({ onNavigateHome }) {
     ].join("\n");
 
     window.open(
-      `${whatsappUrl}?text=${encodeURIComponent(inquiry)}`,
+      withWhatsAppMessage(inquiry),
       "_blank",
       "noopener,noreferrer"
     );
     setSubmitted(true);
   };
 
-  const whatsappLink = `${whatsappUrl}?text=${encodeURIComponent(defaultWhatsAppMessage)}`;
+  const whatsappLink = withWhatsAppMessage(defaultWhatsAppMessage);
 
   return (
     <PageLayout
@@ -75,6 +75,7 @@ function Contact({ onNavigateHome }) {
       subtitle="Have a question about a property? Our team is here to help."
       onNavigateHome={onNavigateHome}
       contentClassName="contact-page-grid"
+      footerText={footerText}
     >
       <section className="contact-information" aria-labelledby="contact-details-title">
         <div className="contact-section-heading">
@@ -92,17 +93,27 @@ function Contact({ onNavigateHome }) {
           <span className="contact-info-icon"><MessageCircle size={21} /></span>
           <span className="contact-info-copy">
             <small>WhatsApp</small>
-            <strong>+92 318 7630194</strong>
+            <strong>{contact.whatsapp}</strong>
             <span>Chat with RENTORA</span>
           </span>
           <span className="contact-card-arrow">↗</span>
         </a>
 
-        <a className="contact-info-card" href="mailto:support@rentora.com">
+        <a className="contact-info-card" href={`tel:${contact.phone.replace(/\s/g, "")}`}>
+          <span className="contact-info-icon"><Phone size={21} /></span>
+          <span className="contact-info-copy">
+            <small>Company Phone</small>
+            <strong>{contact.phone}</strong>
+            <span>Call RENTORA</span>
+          </span>
+          <span className="contact-card-arrow">↗</span>
+        </a>
+
+        <a className="contact-info-card" href={`mailto:${contact.email}`}>
           <span className="contact-info-icon"><Mail size={21} /></span>
           <span className="contact-info-copy">
             <small>Email</small>
-            <strong>support@rentora.com</strong>
+            <strong>{contact.email}</strong>
             <span>Send us your question</span>
           </span>
           <span className="contact-card-arrow">↗</span>
@@ -110,24 +121,30 @@ function Contact({ onNavigateHome }) {
 
         <a
           className="contact-info-card"
-          href={googleMapsUrl}
+          href={contact.mapsUrl}
           target="_blank"
           rel="noreferrer"
-          aria-label={`Open ${officeLocation} in Google Maps`}
+          aria-label={`Open ${contact.address} in Google Maps`}
         >
           <span className="contact-info-icon"><MapPin size={21} /></span>
           <span className="contact-info-copy">
             <small>Location</small>
-            <strong>{officeLocation}</strong>
+            <strong>{contact.address}</strong>
             <span>Open this address in Google Maps</span>
           </span>
           <span className="contact-card-arrow">↗</span>
         </a>
 
         <div className="contact-note">
-          <span>RENTORA</span>
-          <p>Thoughtful guidance for finding a place that feels right.</p>
+          <span>{website.tagline}</span>
+          <p>{contact.businessHours}</p>
         </div>
+
+        <nav className="contact-social-links" aria-label="RENTORA social media">
+          {["facebook", "instagram", "tiktok", "youtube"].filter((network) => contact[`${network}Url`]).map((network) => (
+            <a key={network} href={contact[`${network}Url`]} target="_blank" rel="noreferrer">{network}</a>
+          ))}
+        </nav>
       </section>
 
       <section className="contact-form-panel" aria-labelledby="contact-form-title">

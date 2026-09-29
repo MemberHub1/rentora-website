@@ -1,30 +1,21 @@
 import { ArrowRight, MapPin, ShieldCheck, Users } from "lucide-react";
 import PageLayout from "./PageLayout";
 
-function AboutUs({ onNavigateHome }) {
+function AboutUs({ website, footerText, onNavigateHome }) {
   return (
     <PageLayout
       eyebrow="OUR STORY"
-      title="About RENTORA"
-      subtitle="A more considered way to discover your next place in Lahore."
+      title={website.aboutHeading}
+      subtitle={website.aboutDescription.split("\n\n")[0]}
       onNavigateHome={onNavigateHome}
       contentClassName="about-page-content"
+      footerText={footerText}
     >
       <section className="about-page-story">
         <div className="about-page-story-copy">
           <span className="section-label">PROPERTY, MADE PERSONAL</span>
-          <h2>Find your perfect place. Live better.</h2>
-          <p>
-            RENTORA is a Lahore-focused property platform that brings homes,
-            apartments, and local property opportunities together in one
-            straightforward place.
-          </p>
-          <p>
-            We make it easier to compare the details that matter, explore
-            different neighbourhoods, and start a conversation when a listing
-            feels right. Whether you are renting, buying, or exploring your
-            options, our aim is to make the next step clearer.
-          </p>
+          <h2>{website.aboutHeading}</h2>
+          {website.aboutDescription.split("\n\n").map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           <a className="gold-button" href="#contact">
             Talk to RENTORA
             <ArrowRight size={17} />
