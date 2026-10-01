@@ -1,985 +1,424 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
-import {
-  deleteCmsRecordFromSupabase,
-  loadAdminCmsContentFromSupabase,
-  migrateLegacyContentToSupabase,
-  readLegacyContentForMigration,
-  saveCmsRecordInSupabase,
-  setCmsRecordPublishedInSupabase,
-  updateCmsRecordInSupabase,
-  uploadCmsImage,
-} from "../contentStore";
-import {
-  ArrowLeft,
-  Building2,
-  Download,
-  FileText,
-  Globe2,
-  ImagePlus,
-  MapPin,
-  Phone,
-  Plus,
-  Save,
-  Share2,
-  Settings2,
-  ShieldCheck,
-  Trash2,
-  Users,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, CircleHelp, FileText, LayoutDashboard, LoaderCircle, LogOut, Mail, Paintbrush2, Pencil, Plus, Save, Settings, ShieldAlert, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { defaultSettings } from "../data/catalog";
+import { catalogRepository } from "../lib/catalogRepository";
+import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { Seo } from "../components/SiteLayout";
 
-const sections = [
-  { id: "properties", label: "Properties", icon: Building2 },
-  { id: "locations", label: "Locations", icon: MapPin },
-  { id: "articles", label: "Articles & Tips", icon: FileText },
-  { id: "team", label: "Our Team", icon: Users },
-  { id: "socialLinks", label: "Social Links", icon: Share2 },
-  { id: "contact", label: "Contact Information", icon: Phone },
-  { id: "website", label: "Website Content", icon: Globe2 },
+const adminSections = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "products", label: "Products", icon: Paintbrush2 },
+  { id: "colors", label: "Colors", icon: CircleHelp },
+  { id: "categories", label: "Categories", icon: Settings },
+  { id: "enquiries", label: "Enquiries", icon: Mail },
+  { id: "articles", label: "Articles", icon: FileText },
+  { id: "settings", label: "Website settings", icon: Settings },
 ];
 
-const fieldDefinitions = {
-  properties: [
-    { key: "title", label: "Property Title", required: true },
-    { key: "location", label: "Location", required: true },
-    { key: "price", label: "Price", required: true },
-    { key: "type", label: "Type", type: "select", options: ["Apartment", "House", "Plot", "Commercial"] },
-    { key: "purpose", label: "Purpose", type: "select", options: ["For Rent", "For Sale"] },
-    { key: "beds", label: "Bedrooms", type: "number" },
-    { key: "baths", label: "Bathrooms", type: "number" },
-    { key: "area", label: "Area" },
-    { key: "description", label: "Description", type: "textarea", wide: true },
+const recordDefaults = {
+  products: { name: "", category: "interior", description: "", image: "", sizes: [], finish: "Matt", features: [], usage: "", published: false },
+  colors: { name: "", code: "", family: "White", hex: "#F3F0E8", finish: "Matt", image: "", published: false },
+  categories: { name: "", shortName: "", description: "", image: "", published: false },
+  articles: { title: "", category: "", excerpt: "", content: "", image: "", published: false },
+};
+
+const definitions = {
+  products: [
+    { key: "name", label: "Product name", required: true },
+    { key: "category", label: "Category", type: "category", required: true },
+    { key: "description", label: "Description", type: "textarea", required: true },
+    { key: "sizes", label: "Available sizes", type: "list", hint: "Separate sizes with commas, e.g. 1 L, 4 L" },
+    { key: "finish", label: "Finish" },
+    { key: "features", label: "Features", type: "list", hint: "Separate features with commas" },
+    { key: "usage", label: "Recommended usage" },
+    { key: "image", label: "Product image", type: "image" },
   ],
-  locations: [
-    { key: "title", label: "Location Name", required: true },
-    { key: "shortDescription", label: "Short Description", type: "textarea", wide: true },
-    { key: "propertyCount", label: "Property Count", type: "number" },
+  colors: [
+    { key: "name", label: "Color name", required: true },
+    { key: "code", label: "Color code", required: true },
+    { key: "family", label: "Family", type: "select", options: ["White", "Cream", "Grey", "Blue", "Green", "Yellow", "Brown", "Pink", "Red"] },
+    { key: "hex", label: "Swatch color", type: "color" },
+    { key: "finish", label: "Finish" },
+    { key: "image", label: "Color image", type: "image" },
+  ],
+  categories: [
+    { key: "name", label: "Category name", required: true },
+    { key: "shortName", label: "Short name", required: true },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "image", label: "Category image", type: "image" },
   ],
   articles: [
-    { key: "title", label: "Article Title", required: true },
-    { key: "shortDescription", label: "Short Description", type: "textarea", wide: true },
-    { key: "content", label: "Full Content", type: "textarea", wide: true, rows: 8 },
-    { key: "date", label: "Date", type: "date" },
-    { key: "author", label: "Author" },
-  ],
-  team: [
-    { key: "name", label: "Name", required: true },
-    { key: "role", label: "Job Title / Designation", required: true },
-    { key: "phone", label: "Phone", type: "tel" },
-    { key: "whatsapp", label: "WhatsApp", type: "tel" },
-    { key: "email", label: "Email", type: "email" },
-    { key: "bio", label: "Short Bio", type: "textarea", wide: true },
-    { key: "facebookUrl", label: "Facebook URL", type: "url" },
-    { key: "instagramUrl", label: "Instagram URL", type: "url" },
-    { key: "linkedinUrl", label: "LinkedIn URL", type: "url" },
-  ],
-  socialLinks: [
-    { key: "platform", label: "Platform", type: "select", options: ["WhatsApp Channel", "Facebook", "Instagram", "TikTok", "YouTube", "LinkedIn", "Other"] },
-    { key: "displayName", label: "Display Name" },
-    { key: "url", label: "Link URL", type: "url", required: true, wide: true },
+    { key: "title", label: "Article title", required: true },
+    { key: "category", label: "Article category" },
+    { key: "excerpt", label: "Excerpt", type: "textarea" },
+    { key: "content", label: "Article content", type: "textarea" },
+    { key: "image", label: "Article image", type: "image" },
   ],
 };
 
-const contactFields = [
-  { key: "phone", label: "Company Phone", type: "tel" },
-  { key: "whatsapp", label: "WhatsApp Number", type: "tel" },
-  { key: "email", label: "Email", type: "email" },
-  { key: "address", label: "Office Address", type: "textarea", wide: true },
-  { key: "mapsUrl", label: "Google Maps Link", type: "url", wide: true },
-  { key: "businessHours", label: "Business Hours", type: "textarea", wide: true },
-  { key: "facebookUrl", label: "Facebook URL", type: "url" },
-  { key: "instagramUrl", label: "Instagram URL", type: "url" },
-  { key: "tiktokUrl", label: "TikTok URL", type: "url" },
-  { key: "youtubeUrl", label: "YouTube URL", type: "url" },
-  { key: "whatsappUrl", label: "WhatsApp URL", type: "url", wide: true },
-  { key: "whatsappChannelUrl", label: "WhatsApp Channel URL", type: "url", wide: true },
-];
+function makeId(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
-const websiteFields = [
-  { key: "heroHeading", label: "Hero Heading", type: "textarea", wide: true },
-  { key: "heroSubtitle", label: "Hero Subtitle", type: "textarea", wide: true },
-  { key: "heroImage", label: "Home Page Hero Image", type: "cms-image", wide: true },
-  { key: "aboutHeading", label: "About Us Heading", type: "textarea", wide: true },
-  { key: "aboutDescription", label: "About Us Description", type: "textarea", wide: true, rows: 6 },
-  { key: "aboutImage", label: "About Us Image", type: "cms-image", wide: true },
-  { key: "footerText", label: "Footer Text", type: "textarea", wide: true },
-  { key: "tagline", label: "Company Tagline", wide: true },
-];
+function LoadingMessage({ children = "Loading…" }) {
+  return <div className="data-state" role="status"><LoaderCircle className="spin" size={17} />{children}</div>;
+}
 
-const emptyRecords = {
-  properties: { title: "", location: "", price: "", type: "Apartment", purpose: "For Rent", beds: 1, baths: 1, area: "", description: "", image: "", published: true },
-  locations: { title: "", shortDescription: "", image: "", published: true },
-  articles: { title: "", shortDescription: "", content: "", date: new Date().toISOString().slice(0, 10), author: "", image: "", published: true },
-  team: { name: "", role: "", phone: "", whatsapp: "", email: "", bio: "", facebookUrl: "", instagramUrl: "", linkedinUrl: "", image: "", published: true },
-  socialLinks: { platform: "WhatsApp Channel", displayName: "", url: "", published: true },
-};
-
-const labels = {
-  properties: "property",
-  locations: "location",
-  articles: "article",
-  team: "team member",
-  socialLinks: "social link",
-};
-const pluralLabels = { properties: "properties", locations: "locations", articles: "articles", team: "team members", socialLinks: "social links" };
-
-const slugify = (value) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-
-function AdminPage({ content, onChange, onBackHome }) {
-  const [activeSection, setActiveSection] = useState("properties");
-  const [form, setForm] = useState(emptyRecords.properties);
-  const [editingId, setEditingId] = useState(null);
-  const [imageName, setImageName] = useState("");
-  const [imageError, setImageError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [authForm, setAuthForm] = useState({ email: "", password: "" });
-  const [authError, setAuthError] = useState("");
-  const [authStatus, setAuthStatus] = useState("Checking admin access...");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [sessionUserEmail, setSessionUserEmail] = useState("");
-  const [adminSessionChecked, setAdminSessionChecked] = useState(false);
-  const [imageFile, setImageFile] = useState(null);
-  const [isSavingRecord, setIsSavingRecord] = useState(false);
-  const [hasLegacyContent, setHasLegacyContent] = useState(() => Boolean(readLegacyContentForMigration()));
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [settingsImageFiles, setSettingsImageFiles] = useState({});
-  const imageInputRef = useRef(null);
-  const imagePreviewUrlRef = useRef(null);
-  const settingsImageUrlsRef = useRef({});
-  const isSupabaseReady = Boolean(supabase);
-  const activeMeta = sections.find((section) => section.id === activeSection);
-  const sectionItems = content[activeSection] ?? [];
-  const isRecordSection = Boolean(emptyRecords[activeSection]);
-  const fields = fieldDefinitions[activeSection] ?? [];
-  const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
-
-  useEffect(() => {
-    if (!isAdminAuthenticated) return undefined;
-
-    let active = true;
-    loadAdminCmsContentFromSupabase()
-      .then((cmsContent) => {
-        if (active) onChange(cmsContent);
-      })
-      .catch((error) => {
-        console.error("Could not load admin CMS content from Supabase.", error);
-        if (active) setNotice("Website content could not be loaded from Supabase. Check your connection and admin access.");
-      });
-    const channel = supabase.channel("admin-cms-content")
-      .on("postgres_changes", { event: "*", schema: "public" }, () => {
-        loadAdminCmsContentFromSupabase()
-          .then((cmsContent) => {
-            if (active) onChange(cmsContent);
-          })
-          .catch((error) => {
-            console.error("Could not refresh admin CMS content from Supabase.", error);
-            if (active) setNotice("CMS updates could not be refreshed. Check your connection.");
-          });
-      })
-      .subscribe();
-
-    return () => {
-      active = false;
-      supabase.removeChannel(channel);
-    };
-  }, [isAdminAuthenticated, onChange]);
-
-  const verifyAdminAuthorization = async (userId) => {
-    if (!userId || !supabase) return false;
-
-    const { data, error } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error && error.code !== "PGRST116") {
-      throw error;
+function LoginPage({ onSignedIn }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
+      onSignedIn();
+    } catch (authError) {
+      console.error("Supabase administrator sign-in failed.", authError);
+      setError(authError instanceof Error ? authError.message : "Sign in failed. Check your credentials and try again.");
+    } finally {
+      setSubmitting(false);
     }
-
-    return Boolean(data);
   };
+  return <main className="admin-auth-page"><Seo title="Admin sign in" description="Secure COLORA PAINTS content management sign in." /><section className="admin-auth-card"><span className="eyebrow">COLORA STUDIO</span><h1>Sign in to continue.</h1><p>Use the administrator account created in Supabase Auth.</p><form onSubmit={submit}><label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Signing in…" : "Sign in"} <ArrowRight size={16} /></button></form><Link className="text-link" to="/">Return to website</Link></section></main>;
+}
+
+export default function AdminPage() {
+  const [session, setSession] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(isSupabaseConfigured);
+  const [authorization, setAuthorization] = useState(isSupabaseConfigured ? "checking" : "unavailable");
+  const [authError, setAuthError] = useState("");
+  const [section, setSection] = useState("dashboard");
+  const [records, setRecords] = useState({ products: [], colors: [], categories: [], articles: [], enquiries: [] });
+  const [settings, setSettings] = useState(defaultSettings);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [recordsLoaded, setRecordsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [mutationError, setMutationError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imageError, setImageError] = useState("");
 
   useEffect(() => {
-    let active = true;
-
-    const syncAdminSession = async () => {
-      if (!supabase) {
-        if (!active) return;
-        setIsAdminAuthenticated(false);
-        setSessionUserEmail("");
-        setAdminSessionChecked(true);
-        setIsCheckingAuth(false);
-        setAuthStatus("Supabase admin configuration is missing. Add the deployment env values to enable login.");
-        return;
-      }
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!active) return;
-
-        if (session?.user) {
-          const authorized = await verifyAdminAuthorization(session.user.id);
-          setIsAdminAuthenticated(authorized);
-          setSessionUserEmail(session.user.email ?? "");
-          setAuthStatus(authorized ? "Authorized admin session active." : "This account is not registered in admin_users.");
-        } else {
-          setIsAdminAuthenticated(false);
-          setSessionUserEmail("");
-          setAuthStatus("Sign in with a RENTORA admin account.");
-        }
-      } catch (error) {
-        console.error("Admin session verification failed.", error);
-        if (!active) return;
-        setIsAdminAuthenticated(false);
-        setSessionUserEmail("");
-        setAuthStatus("Unable to verify admin access right now.");
-      } finally {
-        if (active) {
-          setAdminSessionChecked(true);
-          setIsCheckingAuth(false);
-        }
-      }
-    };
-
-    syncAdminSession();
-
-    if (!supabase) {
-      return () => {
-        active = false;
-      };
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!active) return;
-
-      if (session?.user) {
-        try {
-          const authorized = await verifyAdminAuthorization(session.user.id);
-          setIsAdminAuthenticated(authorized);
-          setSessionUserEmail(session.user.email ?? "");
-          setAuthStatus(authorized ? "Authorized admin session active." : "This account is not registered in admin_users.");
-        } catch (error) {
-          console.error("Auth state sync failed.", error);
-          setIsAdminAuthenticated(false);
-          setSessionUserEmail("");
-          setAuthStatus("Unable to verify admin access right now.");
-        }
-      } else {
-        setIsAdminAuthenticated(false);
-        setSessionUserEmail("");
-        setAuthStatus("Sign in with a RENTORA admin account.");
-      }
-
-      setAdminSessionChecked(true);
-      setIsCheckingAuth(false);
+    if (!isSupabaseConfigured) return undefined;
+    let alive = true;
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!alive) return;
+      setSession(nextSession);
+      setAuthorization(nextSession ? "checking" : "signed-out");
+      setRecordsLoaded(false);
+      setCheckingSession(false);
+      setAuthError("");
     });
-
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!alive) return;
+      if (error) {
+        console.error("Unable to read Supabase auth session.", error);
+        setAuthError(error.message);
+      }
+      setSession(data.session);
+      setAuthorization(data.session ? "checking" : "signed-out");
+      setCheckingSession(false);
+    }).catch((error) => {
+      console.error("Unable to read Supabase auth session.", error);
+      if (alive) { setAuthError(error instanceof Error ? error.message : "Unable to check your sign-in."); setCheckingSession(false); }
+    });
     return () => {
-      active = false;
-      subscription.unsubscribe();
+      alive = false;
+      listener.subscription.unsubscribe();
     };
   }, []);
 
-  const signInAdmin = async (event) => {
-    event.preventDefault();
-
-    if (!supabase) {
-      setAuthError("Supabase admin configuration is missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.");
-      setAuthStatus("Login unavailable.");
-      return;
-    }
-
-    setAuthError("");
-    setAuthStatus("Signing in...");
-
-    const email = authForm.email.trim();
-    const password = authForm.password;
-
-    if (!email || !password) {
-      setAuthError("Please enter your email and password.");
-      setAuthStatus("Sign in failed.");
-      return;
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      setAuthError(error.message);
-      setAuthStatus("Sign in failed.");
-      return;
-    }
-
-    const userId = data.user?.id;
-    if (!userId) {
-      setAuthError("No user session was returned. Please try again.");
-      setAuthStatus("Sign in failed.");
-      return;
-    }
-
-    try {
-      const authorized = await verifyAdminAuthorization(userId);
-      if (!authorized) {
-        await supabase.auth.signOut();
-        setIsAdminAuthenticated(false);
-        setSessionUserEmail("");
-        setAuthError("This account is not authorized as a RENTORA admin.");
-        setAuthStatus("Account not authorized.");
-        return;
-      }
-
-      setIsAdminAuthenticated(true);
-      setSessionUserEmail(data.user.email ?? "");
-      setAuthStatus("Authorized admin session active.");
-      setAuthForm({ email: "", password: "" });
-    } catch (error) {
-      console.error("Admin authorization check failed.", error);
-      await supabase.auth.signOut();
-      setIsAdminAuthenticated(false);
-      setSessionUserEmail("");
-      setAuthError("Unable to verify admin access for this account.");
-      setAuthStatus("Authorization check failed.");
-    }
-  };
-
-  const migrateLegacyContent = async () => {
-    const legacyContent = readLegacyContentForMigration();
-    if (!legacyContent) {
-      setHasLegacyContent(false);
-      setNotice("No legacy browser content was found.");
-      return;
-    }
-    setIsMigrating(true);
-    try {
-      const result = await migrateLegacyContentToSupabase(legacyContent);
-      const cmsContent = await loadAdminCmsContentFromSupabase();
-      onChange(cmsContent);
-      setHasLegacyContent(false);
-      const importedCount = Object.values(result.imported).reduce((total, count) => total + count, 0);
-      setNotice(`Legacy import complete: ${importedCount} records imported; ${result.skipped} existing records kept. Browser data was preserved.`);
-    } catch (error) {
-      console.error("Legacy content import failed.", error);
-      setNotice(`Legacy import stopped: ${error.message}. Browser data was preserved; you can safely retry.`);
-    } finally {
-      setIsMigrating(false);
-    }
-  };
-
-  const signOutAdmin = async () => {
-    if (!supabase) {
-      setIsAdminAuthenticated(false);
-      setSessionUserEmail("");
-      setNotice("Supabase configuration is not available.");
-      setAuthStatus("Signed out. Please configure the deployment env values.");
-      setAuthError("");
-      return;
-    }
-
-    try {
-      setNotice("Signing out...");
-      const { error } = await supabase.auth.signOut();
+  useEffect(() => {
+    if (!session?.user?.id || !isSupabaseConfigured) return undefined;
+    let alive = true;
+    supabase.from("admin_users").select("user_id").eq("user_id", session.user.id).maybeSingle().then(({ data, error }) => {
+      if (!alive) return;
       if (error) {
-        setNotice(error.message);
-        return;
-      }
+        console.error("Unable to verify administrator access.", error);
+        setAuthError(error.message);
+        setAuthorization("error");
+      } else setAuthorization(data ? "authorized" : "denied");
+    }).catch((error) => {
+      console.error("Unable to verify administrator access.", error);
+      if (alive) { setAuthError(error instanceof Error ? error.message : "Unable to verify administrator access."); setAuthorization("error"); }
+    });
+    return () => { alive = false; };
+  }, [session]);
 
-      setIsAdminAuthenticated(false);
-      setSessionUserEmail("");
-      setNotice("You have been signed out.");
-      setAuthStatus("Signed out. Please sign in to continue.");
-      setAuthError("");
-      setAuthForm({ email: "", password: "" });
-      setEditingId(null);
-      setForm(emptyRecords.properties);
-      setImageName("");
-      setImageError("");
+  const reload = useCallback(async (showLoading = true) => {
+    if (authorization !== "authorized") return;
+    if (showLoading) {
+      setLoadingRecords(true);
+      setLoadError("");
+    }
+    try {
+      const [products, colors, categories, articles, enquiries, nextSettings] = await Promise.all([
+        catalogRepository.getAll("products", { admin: true }),
+        catalogRepository.getAll("colors", { admin: true }),
+        catalogRepository.getAll("categories", { admin: true }),
+        catalogRepository.getAll("articles", { admin: true }),
+        catalogRepository.getAll("enquiries", { admin: true }),
+        catalogRepository.getSettings(),
+      ]);
+      setRecords({ products, colors, categories, articles, enquiries });
+      setSettings(nextSettings);
+      setRecordsLoaded(true);
     } catch (error) {
-      console.error("Sign out failed.", error);
-      setNotice("Sign out failed. Please try again.");
+      console.error("Unable to load admin content.", error);
+      setLoadError(error instanceof Error ? error.message : "Unable to load admin content.");
+      setRecordsLoaded(true);
+    } finally {
+      if (showLoading) setLoadingRecords(false);
     }
-  };
+  }, [authorization]);
 
-  const selectSection = (sectionId) => {
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    imagePreviewUrlRef.current = null;
-    setActiveSection(sectionId);
-    setEditingId(null);
-    setForm(emptyRecords[sectionId] || content[sectionId] || {});
-    setImageName("");
-    setImageError("");
-    setImageFile(null);
-    setNotice("");
-  };
+  useEffect(() => {
+    const timer = window.setTimeout(() => reload(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [reload]);
 
-  const startNewRecord = () => {
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    imagePreviewUrlRef.current = null;
-    setEditingId(null);
-    setForm({ ...emptyRecords[activeSection], date: new Date().toISOString().slice(0, 10) });
-    setImageName("");
-    setImageError("");
-    setImageFile(null);
-  };
-
-  const editRecord = (record) => {
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    imagePreviewUrlRef.current = null;
-    setEditingId(record.id);
-    setForm({ ...emptyRecords[activeSection], ...record });
-    setImageName("");
-    setImageError("");
-    setImageFile(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const validType = ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
-    if (!validType) {
-      setImageError("Please select a JPG, JPEG, PNG or WEBP image.");
-      return;
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setSession(null);
+      setAuthorization("signed-out");
+      setRecords({ products: [], colors: [], categories: [], articles: [], enquiries: [] });
+    } catch (error) {
+      console.error("Supabase sign-out failed.", error);
+      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setImageError("Image must be 5 MB or smaller.");
-      return;
-    }
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    const previewUrl = URL.createObjectURL(file);
-    imagePreviewUrlRef.current = previewUrl;
-    setImageFile(file);
-    updateForm("image", previewUrl);
-    setImageName(file.name);
-    setImageError("");
-  };
-
-  const handleSettingsImageUpload = (event, key) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const validType = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
-    if (!validType || file.size > 5 * 1024 * 1024) {
-      setNotice("Choose a JPG, PNG or WEBP image up to 5 MB.");
-      return;
-    }
-    if (settingsImageUrlsRef.current[key]) URL.revokeObjectURL(settingsImageUrlsRef.current[key]);
-    const previewUrl = URL.createObjectURL(file);
-    settingsImageUrlsRef.current[key] = previewUrl;
-    setSettingsImageFiles((current) => ({ ...current, [key]: file }));
-    updateForm(key, previewUrl);
-    setNotice("");
   };
 
   const saveRecord = async (event) => {
     event.preventDefault();
-
-    if (!isAdminAuthenticated) {
-      setNotice("CMS writes require an authenticated Supabase admin session.");
-      return;
+    if (!editing) return;
+    setSaving(true);
+    setMutationError("");
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") ?? formData.get("title") ?? "").trim();
+    const data = Object.fromEntries(formData);
+    const collection = editing.collection;
+    const item = { ...editing.record, ...data, id: editing.record.id || makeId(name), published: formData.get("published") === "on" };
+    if (collection === "products") {
+      item.sizes = String(data.sizes ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+      item.features = String(data.features ?? "").split(",").map((value) => value.trim()).filter(Boolean);
     }
-
-    if (activeSection === "properties" && !form.image) {
-      setImageError("Please upload a property image before saving.");
-      return;
-    }
-    const title = form.title || form.name;
-    const id = editingId || `${activeSection}-${crypto.randomUUID()}`;
-    const record = {
-      ...form,
-      id,
-      ...(activeSection === "articles" ? { slug: slugify(title), excerpt: form.shortDescription } : {}),
-      ...(activeSection === "locations" ? { description: form.shortDescription } : {}),
-      ...(activeSection === "locations" ? { propertyCount: form.propertyCount === "" ? null : Number(form.propertyCount) } : {}),
-      ...(activeSection === "properties" ? { beds: Number(form.beds) || 0, baths: Number(form.baths) || 0 } : {}),
-    };
-    const previousItems = sectionItems;
-    const nextItems = editingId
-      ? sectionItems.map((item) => item.id === editingId ? record : item)
-      : [record, ...sectionItems];
-    onChange((current) => ({ ...current, [activeSection]: nextItems }));
-    setIsSavingRecord(true);
+    delete item.upload;
+    let uploadedUrl = "";
+    let cleanupWarning = "";
     try {
-      if (imageFile || record.image?.startsWith("data:")) {
-        record.image = await uploadCmsImage(activeSection, id, imageFile ?? record.image);
+      if (imageFile) {
+        uploadedUrl = await catalogRepository.uploadImage(imageFile, collection);
+        item.image = uploadedUrl;
       }
-      const savedRecord = editingId
-        ? await updateCmsRecordInSupabase(activeSection, id, record)
-        : await saveCmsRecordInSupabase(activeSection, record);
-      onChange((current) => ({
-        ...current,
-        [activeSection]: editingId
-          ? current[activeSection].map((item) => item.id === id ? savedRecord : item)
-          : [savedRecord, ...current[activeSection].filter((item) => item.id !== id)],
-      }));
-      setNotice(`${labels[activeSection]} ${editingId ? "updated" : "added"} in Supabase.`);
-      startNewRecord();
+      await catalogRepository.save(collection, item);
+      if (uploadedUrl && editing.record.image && editing.record.image !== uploadedUrl) {
+        try { await catalogRepository.removeImage(editing.record.image); }
+        catch (cleanupError) {
+          console.error("Saved new content but old image cleanup failed.", cleanupError);
+          cleanupWarning = " The old image could not be removed from Storage.";
+        }
+      }
+      setEditing(null);
+      setImageFile(null);
+      setImageError("");
+      setNotice(`${collection.slice(0, -1)} saved.${cleanupWarning}`);
+      await reload();
     } catch (error) {
-      console.error(`${labels[activeSection]} save failed.`, error);
-      onChange((current) => ({ ...current, [activeSection]: previousItems }));
-      setNotice(`${labels[activeSection]} could not be saved: ${error.message}`);
+      console.error(`Unable to save ${collection} record.`, error);
+      if (uploadedUrl) {
+        try { await catalogRepository.removeImage(uploadedUrl); }
+        catch (cleanupError) {
+          console.error("Could not clean up uploaded image after save failed.", cleanupError);
+          setMutationError(`${error instanceof Error ? error.message : `Could not save ${collection}.`} The uploaded image also could not be removed.`);
+          return;
+        }
+      }
+      setMutationError(error instanceof Error ? error.message : `Could not save ${collection}.`);
     } finally {
-      setIsSavingRecord(false);
+      setSaving(false);
     }
   };
 
-  const deleteRecord = async (id) => {
-    if (!isAdminAuthenticated) {
-      setNotice("CMS writes require an authenticated Supabase admin session.");
-      return;
-    }
-
-    if (!window.confirm(`Delete this ${labels[activeSection]}?`)) return;
-
-    const previousItems = sectionItems;
-    onChange((current) => ({ ...current, [activeSection]: current[activeSection].filter((item) => item.id !== id) }));
+  const deleteRecord = async (collection, id) => {
+    if (!window.confirm("Delete this record? This cannot be undone.")) return;
+    setMutationError("");
     try {
-      await deleteCmsRecordFromSupabase(activeSection, id);
-      setNotice(`${labels[activeSection]} deleted from Supabase.`);
-      if (editingId === id) startNewRecord();
+      const record = records[collection]?.find((item) => item.id === id);
+      await catalogRepository.remove(collection, id);
+      let cleanupFailed = false;
+      if (record?.image) {
+        try { await catalogRepository.removeImage(record.image); }
+        catch (cleanupError) { cleanupFailed = true; console.error("Record deleted but its image cleanup failed.", cleanupError); }
+      }
+      setNotice(cleanupFailed ? `${collection.slice(0, -1)} deleted. The old image could not be removed from Storage.` : `${collection.slice(0, -1)} deleted.`);
+      await reload();
     } catch (error) {
-      console.error(`${labels[activeSection]} delete failed.`, error);
-      onChange((current) => ({ ...current, [activeSection]: previousItems }));
-      setNotice(`${labels[activeSection]} could not be deleted: ${error.message}`);
+      console.error(`Unable to delete ${collection} record.`, error);
+      setMutationError(error instanceof Error ? error.message : `Could not delete ${collection}.`);
     }
   };
 
-  const togglePublished = async (record) => {
-    if (!isAdminAuthenticated) {
-      setNotice("CMS writes require an authenticated Supabase admin session.");
-      return;
-    }
-
-    const published = !record.published;
-    const previousItems = sectionItems;
-    onChange((current) => ({
-      ...current,
-      [activeSection]: current[activeSection].map((item) => item.id === record.id ? { ...item, published } : item),
-    }));
+  const togglePublished = async (collection, record) => {
+    setMutationError("");
     try {
-      const savedRecord = await setCmsRecordPublishedInSupabase(activeSection, record.id, published);
-      onChange((current) => ({
-        ...current,
-        [activeSection]: current[activeSection].map((item) => item.id === record.id ? savedRecord : item),
-      }));
-      setNotice(`${labels[activeSection]} ${published ? "published" : "unpublished"} in Supabase.`);
+      await catalogRepository.setPublished(collection, record.id, !record.published);
+      setNotice(`${record.name ?? record.title} ${record.published ? "unpublished" : "published"}.`);
+      await reload();
     } catch (error) {
-      console.error(`${labels[activeSection]} publish status update failed.`, error);
-      onChange((current) => ({ ...current, [activeSection]: previousItems }));
-      setNotice(`Visibility could not be updated: ${error.message}`);
+      console.error(`Unable to change ${collection} publication.`, error);
+      setMutationError(error instanceof Error ? error.message : "Could not update publishing status.");
+    }
+  };
+
+  const updateEnquiryStatus = async (id, read) => {
+    setMutationError("");
+    try {
+      await catalogRepository.setEnquiryRead(id, read);
+      setNotice(read ? "Enquiry marked as read." : "Enquiry marked as new.");
+      await reload();
+    } catch (error) {
+      console.error("Unable to update enquiry status.", error);
+      setMutationError(error instanceof Error ? error.message : "Could not update enquiry status.");
     }
   };
 
   const saveSettings = async (event) => {
     event.preventDefault();
-    if (!isAdminAuthenticated) {
-      setNotice("CMS writes require an authenticated Supabase admin session.");
-      return;
-    }
-    const previousValue = content[activeSection];
-    const settingsRecord = { ...form };
-    onChange((current) => ({ ...current, [activeSection]: settingsRecord }));
-    setIsSavingRecord(true);
+    setSaving(true);
+    setMutationError("");
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    let uploadedUrl = "";
+    let cleanupWarning = "";
     try {
-      for (const [key, file] of Object.entries(settingsImageFiles)) {
-        settingsRecord[key] = await uploadCmsImage("website", key, file);
+      if (imageFile) {
+        uploadedUrl = await catalogRepository.uploadImage(imageFile, "site");
+        data.heroImage = uploadedUrl;
       }
-      const savedValue = await saveCmsRecordInSupabase(activeSection, settingsRecord, { singleton: true });
-      onChange((current) => ({ ...current, [activeSection]: savedValue }));
-      setForm(savedValue);
-      Object.values(settingsImageUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
-      settingsImageUrlsRef.current = {};
-      setSettingsImageFiles({});
-      setNotice(`${activeMeta.label} saved to Supabase.`);
+      await catalogRepository.updateSettings(data);
+      setImageFile(null);
+      setNotice("Website settings saved.");
+      const savedSettings = await catalogRepository.getSettings();
+      window.dispatchEvent(new CustomEvent("colora:settings-updated", { detail: savedSettings }));
+      if (uploadedUrl && settings.heroImage) {
+        try { await catalogRepository.removeImage(settings.heroImage); }
+        catch (cleanupError) {
+          console.error("Settings saved but previous hero image cleanup failed.", cleanupError);
+          cleanupWarning = " The prior website image could not be removed from Storage.";
+        }
+      }
+      if (cleanupWarning) setNotice((current) => `${current}${cleanupWarning}`);
+      await reload();
     } catch (error) {
-      console.error(`${activeMeta.label} save failed.`, error);
-      onChange((current) => ({ ...current, [activeSection]: previousValue }));
-      setNotice(`${activeMeta.label} could not be saved: ${error.message}`);
-    } finally {
-      setIsSavingRecord(false);
-    }
+      console.error("Unable to save website settings.", error);
+      if (uploadedUrl) {
+        try { await catalogRepository.removeImage(uploadedUrl); }
+        catch (cleanupError) {
+          console.error("Could not clean up uploaded image after settings save failed.", cleanupError);
+          setMutationError(`${error instanceof Error ? error.message : "Could not save settings."} The uploaded image also could not be removed.`);
+          return;
+        }
+      }
+      setMutationError(error instanceof Error ? error.message : "Could not save settings.");
+    } finally { setSaving(false); }
   };
 
-  const adminWriteStatus = adminSessionChecked
-    ? isAdminAuthenticated
-      ? "Authenticated admin access is available for CMS writes."
-      : "Admin write operations are disabled because there is no authenticated Supabase admin session yet."
-    : "Checking Supabase admin session status...";
+  const count = useMemo(() => ({ products: records.products.length, colors: records.colors.length, categories: records.categories.length, articles: records.articles.length, enquiries: records.enquiries.length }), [records]);
 
-  const renderFields = (definitions) => definitions.map((field) => (
-    <label className={field.wide ? "admin-field-wide" : ""} key={field.key}>
-      {field.label}
-      {field.type === "cms-image" ? (
-        <div className="admin-upload-field">
-          <input className="admin-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleSettingsImageUpload(event, field.key)} aria-label={`Upload ${field.label.toLowerCase()}`} />
-          <button type="button" className="gold-button admin-upload-button" onClick={(event) => event.currentTarget.previousElementSibling.click()}><ImagePlus size={18} /> Upload Image</button>
-          {form[field.key] && <div className="admin-image-preview"><img src={form[field.key]} alt={`${field.label} preview`} /><div className="admin-image-details"><span>Current image</span><button type="button" className="admin-remove-image" onClick={() => { if (settingsImageUrlsRef.current[field.key]) URL.revokeObjectURL(settingsImageUrlsRef.current[field.key]); delete settingsImageUrlsRef.current[field.key]; setSettingsImageFiles((current) => { const next = { ...current }; delete next[field.key]; return next; }); updateForm(field.key, ""); }}>Remove Image</button></div></div>}
-        </div>
-      ) : field.type === "textarea" ? (
-        <textarea rows={field.rows || 4} value={form[field.key] ?? ""} onChange={(event) => updateForm(field.key, event.target.value)} required={field.required} />
-      ) : field.type === "select" ? (
-        <select value={form[field.key] ?? field.options[0]} onChange={(event) => updateForm(field.key, event.target.value)}>
-          {field.options.map((option) => <option key={option}>{option}</option>)}
-        </select>
-      ) : (
-        <input type={field.type || "text"} min={field.type === "number" ? "0" : undefined} value={form[field.key] ?? ""} onChange={(event) => updateForm(field.key, event.target.value)} required={field.required} />
-      )}
-    </label>
-  ));
+  if (checkingSession || authorization === "checking") return <main className="admin-auth-page"><LoadingMessage>Checking administrator access…</LoadingMessage></main>;
+  if (!isSupabaseConfigured || authorization === "unavailable") return <main className="admin-auth-page"><Seo title="Admin unavailable" description="Supabase configuration is required to access the admin." /><section className="admin-auth-card"><ShieldAlert size={28} /><h1>Admin setup required.</h1><p>Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> to enable secure administrator sign-in.</p><Link className="text-link" to="/">Return to website</Link></section></main>;
+  if (!session || authorization === "signed-out") return <LoginPage onSignedIn={() => setAuthorization("checking")} />;
+  if (authorization === "denied" || authorization === "error") return <main className="admin-auth-page"><Seo title="Admin access denied" description="Administrator access is required." /><section className="admin-auth-card"><ShieldAlert size={28} /><h1>{authorization === "denied" ? "You don’t have admin access." : "Couldn’t verify access."}</h1><p>{authorization === "denied" ? "This signed-in Supabase user is not listed in the admin_users table." : authError || "Please try again after confirming database access."}</p>{authError && <p className="form-error" role="alert">{authError}</p>}<button className="button button-outline" type="button" onClick={signOut}>Sign out</button></section></main>;
 
-  if (isCheckingAuth || (!isAdminAuthenticated && !adminSessionChecked)) {
-    return (
-      <div className="site admin-page">
-        <header className="header">
-          <div className="container nav-container admin-nav">
-            <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
-            <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
-            <span className="admin-label">ADMIN ACCESS</span>
-          </div>
-        </header>
-        <main className="admin-main">
-          <div className="container">
-            <section className="admin-settings-card">
-              <div className="admin-card-heading"><div><h3>Checking admin access</h3><p>{authStatus}</p></div></div>
-            </section>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const active = adminSections.find((item) => item.id === section);
+  const beginEdit = (collection, record = recordDefaults[collection]) => {
+    setNotice("");
+    setMutationError("");
+    setImageError("");
+    setImageFile(null);
+    setEditing({ collection, record: { ...record } });
+  };
 
-  if (!isAdminAuthenticated) {
-    return (
-      <div className="site admin-page">
-        <header className="header">
-          <div className="container nav-container admin-nav">
-            <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
-            <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
-            <span className="admin-label">ADMIN LOGIN</span>
-          </div>
-        </header>
-
-        <main className="admin-main">
-          <div className="container">
-            <section className="admin-form-card" style={{ maxWidth: 520, margin: "2rem auto" }}>
-              <div className="admin-card-heading">
-                <div>
-                  <h3>RENTORA Admin Login</h3>
-                  <p>Sign in with the admin account registered in Supabase Auth and admin_users.</p>
-                </div>
-              </div>
-
-              <form onSubmit={signInAdmin} className="admin-form">
-                <label>
-                  Email
-                  <input type="email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} placeholder="admin@rentora.com" required disabled={!isSupabaseReady} />
-                </label>
-                <label>
-                  Password
-                  <input type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="Enter your password" required disabled={!isSupabaseReady} />
-                </label>
-
-                {authError && <p className="admin-notice" role="alert">{authError}</p>}
-                <p className="admin-notice" role="status">{authStatus}</p>
-
-                <button type="submit" className="gold-button admin-save" disabled={!isSupabaseReady}><Save size={18} /> Sign In</button>
-              </form>
-            </section>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  return (
-    <div className="site admin-page">
-      <header className="header">
-        <div className="container nav-container admin-nav">
-          <button className="back-button" onClick={onBackHome}><ArrowLeft size={16} /> Back to Website</button>
-          <button className="logo" onClick={onBackHome}><span className="logo-mark">R</span><span>RENT<span>ORA</span></span></button>
-          <div className="admin-user-actions">
-            <span className="admin-label">{sessionUserEmail || "ADMIN"}</span>
-            <button className="gold-button admin-logout-button" onClick={signOutAdmin} type="button"><X size={16} /> Logout</button>
-          </div>
-        </div>
-      </header>
-
-      <main className="admin-main">
-        <div className="container">
-          <div className="admin-heading">
-            <div><span className="section-label">RENTORA MANAGEMENT</span><h1>Website CMS</h1><p>Manage your listings and the content visitors see across RENTORA.</p></div>
-            {isRecordSection && <button className="gold-button" onClick={startNewRecord}><Plus size={18} /> Add {labels[activeSection]}</button>}
-            {hasLegacyContent && <button className="outline-button" onClick={migrateLegacyContent} disabled={!isAdminAuthenticated || isMigrating}><Download size={17} /> {isMigrating ? "Importing..." : "Import Legacy Browser Content"}</button>}
-          </div>
-
-          <div className="admin-shell">
-            <aside className="admin-sidebar" aria-label="CMS sections">
-              <span className="admin-sidebar-label">MANAGE WEBSITE</span>
-              {sections.map(({ id, label, icon: Icon }) => (
-                <button key={id} className={`admin-nav-item ${activeSection === id ? "active" : ""}`} onClick={() => selectSection(id)}>
-                  <Icon size={18} /><span>{label}</span>{id in content && Array.isArray(content[id]) && <small>{content[id].length}</small>}
-                </button>
-              ))}
-              <div className="admin-sidebar-note"><ShieldCheck size={17} /><span>Supabase is the source of truth.</span></div>
-            </aside>
-
-            <section className="admin-workspace">
-              <div className="admin-workspace-heading">
-                <div><span className="section-label">CONTENT</span><h2>{activeMeta.label}</h2><p>{isRecordSection ? `${sectionItems.length} ${pluralLabels[activeSection]} in your library` : "Edit the information shown on your website."}</p></div>
-                {isRecordSection && <button className="gold-button admin-mobile-add" onClick={startNewRecord}><Plus size={17} /> Add</button>}
-              </div>
-
-              {notice && <p className="admin-notice" role="status">{notice}</p>}
-              <p className="admin-notice" role="status">{adminWriteStatus}</p>
-
-              {isRecordSection ? (
-                <div className="admin-content-grid">
-                  <section className="admin-form-card">
-                    <div className="admin-card-heading">
-                      <div><h3>{editingId ? `Edit ${labels[activeSection]}` : `Add ${labels[activeSection]}`}</h3><p>{editingId ? "Update this entry and save your changes." : "Add a new entry to your website."}</p></div>
-                      {editingId && <button className="icon-button" onClick={startNewRecord} aria-label="Cancel edit"><X size={18} /></button>}
-                    </div>
-                    <form onSubmit={saveRecord} className="admin-form">
-                      <div className="admin-fields-grid">{renderFields(fields)}</div>
-                      {activeSection !== "socialLinks" && <div className="admin-upload-field">
-                        <span className="admin-upload-label">{activeSection === "team" ? "Profile Photo" : activeSection === "articles" ? "Article Image" : activeSection === "locations" ? "Location Image" : "Property Image"}</span>
-                        <input ref={imageInputRef} className="admin-file-input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handleImageUpload} aria-label="Upload image" />
-                        <button type="button" className="gold-button admin-upload-button" onClick={() => imageInputRef.current?.click()}><ImagePlus size={18} /> Upload Image</button>
-                        <span className="admin-upload-hint">JPG, JPEG, PNG or WEBP, up to 5 MB</span>
-                        {imageError && <span className="admin-image-error" role="alert">{imageError}</span>}
-                      </div>}
-                      {imagePreview && <div className="admin-image-preview"><img src={imagePreview} alt="Selected image preview" /><div className="admin-image-details"><span><ImagePlus size={16} /> {imageName || "Current image"}</span><button type="button" className="admin-remove-image" onClick={() => { if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current); imagePreviewUrlRef.current = null; setImageFile(null); updateForm("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button></div></div>}
-                      <label className="admin-publish-toggle"><input type="checkbox" checked={Boolean(form.published)} onChange={(event) => updateForm("published", event.target.checked)} /><span>Published on website</span></label>
-                      <button type="submit" className="gold-button admin-save" disabled={!isAdminAuthenticated || isSavingRecord} aria-disabled={!isAdminAuthenticated || isSavingRecord}><Save size={18} /> {isSavingRecord ? "Saving..." : editingId ? "Save Changes" : `Add ${labels[activeSection]}`}</button>
-                    </form>
-                  </section>
-
-                  <section className="admin-list-card">
-                    <div className="admin-card-heading"><div><h3>All {activeMeta.label}</h3><p>Choose an entry to update it or change its visibility.</p></div></div>
-                    <div className="admin-record-list">
-                      {sectionItems.length === 0 && <p className="admin-empty">No entries yet. Add your first {labels[activeSection]} to get started.</p>}
-                      {sectionItems.map((record) => {
-                        const recordTitle = record.title || record.name || record.displayName || record.platform;
-                        return <article className="admin-record-row" key={record.id}>
-                          {record.image ? <img src={record.image} alt="" /> : <span className="admin-record-placeholder"><activeMeta.icon size={19} /></span>}
-                          <div className="admin-record-info"><strong>{recordTitle}</strong><span>{record.location || record.role || record.shortDescription || record.price || record.url || record.author || "RENTORA content"}</span><small className={record.published ? "published" : "unpublished"}>{record.published ? "Published" : "Unpublished"}</small></div>
-                          <div className="admin-record-actions"><button className="admin-text-action" onClick={() => togglePublished(record)} disabled={!isAdminAuthenticated} aria-disabled={!isAdminAuthenticated}>{record.published ? "Unpublish" : "Publish"}</button><button className="icon-button" onClick={() => editRecord(record)} aria-label={`Edit ${recordTitle}`}><Settings2 size={17} /></button><button className="icon-button danger" onClick={() => deleteRecord(record.id)} aria-label={`Delete ${recordTitle}`} disabled={!isAdminAuthenticated} aria-disabled={!isAdminAuthenticated}><Trash2 size={17} /></button></div>
-                        </article>;
-                      })}
-                    </div>
-                  </section>
-                </div>
-              ) : (
-                <section className="admin-settings-card">
-                  <div className="admin-card-heading"><div><h3>{activeMeta.label}</h3><p>These values are used throughout the public website.</p></div></div>
-                  <form className="admin-form" onSubmit={saveSettings}>
-                    <div className="admin-fields-grid">{renderFields(activeSection === "contact" ? contactFields : websiteFields)}</div>
-                    <button className="gold-button admin-save" type="submit" disabled={!isAdminAuthenticated || isSavingRecord}><Save size={18} /> {isSavingRecord ? "Saving..." : `Save ${activeMeta.label}`}</button>
-                  </form>
-                </section>
-              )}
-            </section>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  return <main className="admin-page"><Seo title="Admin dashboard" description="Manage COLORA PAINTS website content." /><div className="container admin-layout">
+    <aside className="admin-sidebar"><div className="admin-sidebar-title"><span className="eyebrow">COLORA STUDIO</span><strong>Content manager</strong><span className="admin-session-email">{session.user.email}</span></div><nav aria-label="Admin sections">{adminSections.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={section === id ? "admin-nav-item active" : "admin-nav-item"} onClick={() => { setSection(id); setEditing(null); setImageFile(null); setNotice(""); setMutationError(""); }}><Icon size={17} />{label}{id === "enquiries" && records.enquiries.some((item) => item.status === "new") && <span className="admin-nav-count">{records.enquiries.filter((item) => item.status === "new").length}</span>}</button>)}</nav><div className="admin-security-note"><span className="security-dot security-dot-good" /><div><strong>Verified administrator</strong><span>Supabase Auth · RLS protected</span></div></div><button type="button" className="admin-signout" onClick={signOut}><LogOut size={15} /> Sign out</button></aside>
+    <section className="admin-content">
+      <div className="admin-page-heading"><div><span className="eyebrow">WEBSITE CONTENT</span><h1>{active?.label}</h1></div><div className="admin-heading-actions"><button className="button button-outline admin-refresh" type="button" onClick={reload} disabled={loadingRecords}>Refresh</button><Link className="text-link" to="/">View website <ArrowRight size={15} /></Link></div></div>
+      {notice && <div className="admin-notice" role="status"><Check size={16} />{notice}<button className="icon-button" type="button" onClick={() => setNotice("")} aria-label="Dismiss notice"><X size={15} /></button></div>}
+      {mutationError && <div className="admin-error" role="alert">{mutationError}</div>}
+      {loadError && <div className="admin-error" role="alert">{loadError}<button className="text-link" type="button" onClick={reload}>Try again <ArrowRight size={14} /></button></div>}
+      {(loadingRecords || !recordsLoaded) && <LoadingMessage>Loading admin content…</LoadingMessage>}
+      {!loadingRecords && recordsLoaded && !loadError && section === "dashboard" && <><div className="admin-stats-grid">{[{ label: "Products", value: count.products }, { label: "Colors", value: count.colors }, { label: "Categories", value: count.categories }, { label: "Articles", value: count.articles }, { label: "Enquiries", value: count.enquiries }].map((stat) => <div className="admin-stat-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></div>)}</div><div className="admin-info-panel"><span className="eyebrow">CONNECTED CONTENT</span><h2>Your website content, in one place.</h2><p>Records are read from Supabase. Changes are persisted in the configured database and image bucket.</p><ul><li>Only published catalog and article records are visible publicly.</li><li>Enquiries are visible only to verified administrators.</li><li>Product images are stored in Supabase Storage.</li></ul></div></>}
+      {!loadingRecords && recordsLoaded && !loadError && ["products", "colors", "categories", "articles"].includes(section) && <div className="admin-list-panel"><div className="admin-panel-heading"><div><span>{count[section]} records</span><p>Changes are saved to Supabase.</p></div><button className="button button-dark" type="button" onClick={() => beginEdit(section)}><Plus size={16} /> Add {section.slice(0, -1)}</button></div>
+        {editing?.collection === section && <RecordForm collection={section} editing={editing} categories={records.categories} saving={saving} imageFile={imageFile} setImageFile={setImageFile} imageError={imageError} setImageError={setImageError} onClose={() => setEditing(null)} onSubmit={saveRecord} />}
+        {records[section].length ? records[section].map((record) => <article className="admin-record" key={record.id}>{record.image ? <img src={record.image} alt="" /> : section === "colors" ? <span className="admin-record-color" style={{ backgroundColor: record.hex }} /> : <span className="admin-record-color admin-record-placeholder" />}<div><strong>{record.name ?? record.title}</strong><span>{record.published ? "Published" : "Draft"} · {record.category ?? record.code ?? record.shortName ?? record.finish}</span></div><button className="admin-publish-button" type="button" onClick={() => togglePublished(section, record)}>{record.published ? "Unpublish" : "Publish"}</button><button className="icon-button" type="button" aria-label={`Edit ${record.name ?? record.title}`} onClick={() => beginEdit(section, record)}><Pencil size={16} /></button><button className="icon-button danger-icon" type="button" aria-label={`Delete ${record.name ?? record.title}`} onClick={() => deleteRecord(section, record.id)}><Trash2 size={16} /></button></article>) : <div className="empty-state"><h2>No {section} yet</h2><p>Add your first {section.slice(0, -1)} to get started.</p></div>}
+      </div>}
+      {!loadingRecords && recordsLoaded && !loadError && section === "enquiries" && <div className="admin-list-panel"><div className="admin-panel-heading"><div><span>{count.enquiries} enquiries</span><p>Private to verified administrators.</p></div></div>{records.enquiries.length ? records.enquiries.map((item) => <article className="enquiry-record" key={item.id}><div className="enquiry-record-heading"><strong>{item.name}</strong><span>{new Date(item.created_at).toLocaleString()}</span></div><div>{item.email && <span>{item.email}</span>}<span>{item.phone}</span>{item.city && <span>{item.city}</span>}</div>{item.interest && <span className="interest-tag">{item.interest}</span>}<p>{item.message}</p><div className="enquiry-actions"><span className={`enquiry-status ${item.status}`}>{item.status}</span><button className="admin-publish-button" type="button" onClick={() => updateEnquiryStatus(item.id, item.status !== "read")}>{item.status === "read" ? "Mark as new" : "Mark as read"}</button><button className="icon-button danger-icon" type="button" aria-label={`Delete enquiry from ${item.name}`} onClick={() => deleteRecord("enquiries", item.id)}><Trash2 size={16} /></button></div></article>) : <div className="empty-state"><Mail size={22} /><h2>No enquiries yet</h2><p>New customer enquiries will appear here.</p></div>}</div>}
+      {!loadingRecords && recordsLoaded && !loadError && section === "settings" && <SettingsForm settings={settings} saving={saving} onSubmit={saveSettings} imageFile={imageFile} setImageFile={setImageFile} imageError={imageError} setImageError={setImageError} />}
+    </section>
+  </div></main>;
 }
 
-export default AdminPage;
-/*
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Edit3, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
+function RecordForm({ collection, editing, categories, saving, imageFile, setImageFile, imageError, setImageError, onClose, onSubmit }) {
+  const record = editing.record;
+  return <form key={`${collection}-${record.id ?? "new"}`} className="admin-edit-form" onSubmit={onSubmit}>
+    <div className="admin-form-heading"><h2>{record.id ? "Edit" : "Add"} {collection.slice(0, -1)}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close form"><X size={17} /></button></div>
+    {definitions[collection].map((field) => <AdminField key={field.key} field={field} value={record[field.key]} categories={categories} setImageFile={setImageFile} setImageError={setImageError} />)}
+    <label className="admin-checkbox"><input type="checkbox" name="published" defaultChecked={Boolean(record.published)} /> Published on public website</label>
+    {imageFile && <span className="placeholder-label">Selected image: {imageFile.name}</span>}
+    {imageError && <p className="form-error" role="alert">{imageError}</p>}
+    <button className="button button-dark" type="submit" disabled={saving}>{saving ? "Saving…" : `Save ${collection.slice(0, -1)}`} <Save size={15} /></button>
+  </form>;
+}
 
-const emptyProperty = {
-  title: "",
-  location: "",
-  type: "Apartment",
-  beds: 1,
-  baths: 1,
-  area: "",
-  price: "",
-  purpose: "For Rent",
-  image: "",
-};
-
-function AdminPage({ properties, editingProperty, onEdit, onDelete, onSave, onBackHome }) {
-  const [form, setForm] = useState(editingProperty || emptyProperty);
-  const [imageName, setImageName] = useState("");
-  const [imageError, setImageError] = useState("");
-  const imageInputRef = useRef(null);
-  const isEditing = Boolean(editingProperty?.id);
-
-  useEffect(() => {
-    setForm(editingProperty || emptyProperty);
-    setImageName("");
+function AdminField({ field, value, categories, setImageFile, setImageError }) {
+  if (field.type === "category") return <label>{field.label}<select name={field.key} defaultValue={value || categories[0]?.id} required={field.required}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>{!categories.length && <span className="form-error">Create a category before adding products.</span>}</label>;
+  if (field.type === "select") return <label>{field.label}<select name={field.key} defaultValue={value}>{field.options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+  if (field.type === "textarea") return <label>{field.label}<textarea name={field.key} rows="4" defaultValue={value ?? ""} required={field.required} /></label>;
+  if (field.type === "list") return <label>{field.label}<input name={field.key} defaultValue={Array.isArray(value) ? value.join(", ") : ""} placeholder={field.hint} /><span className="placeholder-label">{field.hint}</span></label>;
+  if (field.type === "color") return <label>{field.label}<input name={field.key} type="color" defaultValue={value || "#F3F0E8"} /></label>;
+  if (field.type === "image") return <div className="admin-image-field"><label>{field.label}{value && <img className="admin-image-preview" src={value} alt="Current image" />}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => {
+    const file = event.target.files?.[0] ?? null;
+    if (file && (!file.type.startsWith("image/") || file.size > 8_000_000)) {
+      setImageError(!file.type.startsWith("image/") ? "Choose a valid image file." : "Choose an image smaller than 8 MB.");
+      event.target.value = "";
+      setImageFile(null);
+      return;
+    }
     setImageError("");
-  }, [editingProperty]);
+    setImageFile(file);
+  }} /></label><span className="placeholder-label">Image uploads to the public website-images bucket (8 MB maximum).</span></div>;
+  return <label>{field.label}<input name={field.key} defaultValue={value ?? ""} required={field.required} /></label>;
+}
 
-  const imagePreview = useMemo(() => form.image?.trim(), [form.image]);
-
-  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-
-    if (!file) return;
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setImageError("Please select a JPG, PNG or WEBP image.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setImageError("Image must be 5 MB or smaller.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        setImageError("This image could not be read. Please try another file.");
+function SettingsForm({ settings, saving, onSubmit, imageFile, setImageFile, imageError, setImageError }) {
+  const [imageUrl, setImageUrl] = useState(settings.heroImage ?? "");
+  return <form key={settings.companyName + settings.email} className="admin-settings-form" onSubmit={onSubmit}>
+    <span className="eyebrow">PUBLIC WEBSITE INFORMATION</span><h2>Keep your details up to date.</h2><p>Saved site information appears on the public website.</p>
+    {[["companyName","Company name"],["tagline","Tagline"],["phone","Phone"],["email","Email"],["address","Address"],["whatsapp","WhatsApp"],["facebookUrl","Facebook URL"],["instagramUrl","Instagram URL"],["tiktokUrl","TikTok URL"],["hours","Business hours"],["yearsExperience","Years of experience"],["happyCustomers","Happy customers"],["productRange","Product range"],["citiesServed","Cities served"]].map(([key,label]) => <label key={key}>{label}<input name={key} type={key === "email" ? "email" : ["facebookUrl","instagramUrl","tiktokUrl"].includes(key) ? "url" : "text"} defaultValue={settings[key] ?? ""} /></label>)}
+    <input type="hidden" name="heroImage" value={settings.heroImage ?? ""} readOnly />
+    <label>Website / hero image{imageUrl && <img className="admin-image-preview" src={imageUrl} alt="Current website image" />}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => {
+      const file = event.target.files?.[0] ?? null;
+      if (file && (!file.type.startsWith("image/") || file.size > 8_000_000)) {
+        setImageError(!file.type.startsWith("image/") ? "Choose a valid image file." : "Choose an image smaller than 8 MB.");
+        event.target.value = "";
+        setImageFile(null);
         return;
       }
-      update("image", reader.result);
-      setImageName(file.name);
       setImageError("");
-    };
-    reader.onerror = () => setImageError("This image could not be read. Please try another file.");
-    reader.readAsDataURL(file);
-  };
-
-  const submit = (event) => {
-    event.preventDefault();
-    if (!form.title.trim() || !form.location.trim() || !form.price.trim()) return;
-    if (!form.image) {
-      setImageError("Please upload a property image before publishing.");
-      return;
-    }
-    onSave({
-      ...form,
-      id: form.id || `property-${Date.now()}`,
-      title: form.title.trim(),
-      location: form.location.trim(),
-      price: form.price.trim(),
-      area: form.area.trim(),
-      image: form.image,
-      beds: Number(form.beds) || 0,
-      baths: Number(form.baths) || 0,
-    });
-    setForm(emptyProperty);
-    setImageName("");
-    setImageError("");
-  };
-
-  return (
-    <div className="site admin-page">
-      <header className="header">
-        <div className="container nav-container admin-nav">
-          <button className="back-button" onClick={onBackHome}>
-            <ArrowLeft size={16} /> Back to Website
-          </button>
-          <button className="logo" onClick={onBackHome}>
-            <span className="logo-mark">R</span>
-            <span>RENT<span>ORA</span></span>
-          </button>
-          <span className="admin-label">ADMIN PANEL</span>
-        </div>
-      </header>
-
-      <main className="admin-main">
-        <div className="container">
-          <div className="admin-heading">
-            <div>
-              <span className="section-label">RENTORA MANAGEMENT</span>
-              <h1>Property Dashboard</h1>
-              <p>Add, edit or remove property listings. Changes are saved in this browser for now.</p>
-            </div>
-            <button className="gold-button" onClick={() => setForm(emptyProperty)}>
-              <Plus size={18} /> Add Property
-            </button>
-          </div>
-
-          <div className="admin-grid">
-            <section className="admin-form-card">
-              <div className="admin-card-heading">
-                <div>
-                  <h2>{isEditing ? "Edit Property" : "Add Property"}</h2>
-                  <p>{isEditing ? "Update the listing details." : "Create a new listing for RENTORA."}</p>
-                </div>
-                {isEditing && <button className="icon-button" onClick={() => onEdit(null)} aria-label="Cancel edit"><X size={18} /></button>}
-              </div>
-
-              <form onSubmit={submit} className="admin-form">
-                <label>Property Title<input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Luxury Modern Apartment" required /></label>
-                <label>Location<input value={form.location} onChange={(e) => update("location", e.target.value)} placeholder="DHA Lahore" required /></label>
-                <div className="admin-form-row">
-                  <label>Type<select value={form.type} onChange={(e) => update("type", e.target.value)}><option>Apartment</option><option>House</option><option>Plot</option><option>Commercial</option></select></label>
-                  <label>Purpose<select value={form.purpose} onChange={(e) => update("purpose", e.target.value)}><option>For Rent</option><option>For Sale</option></select></label>
-                </div>
-                <div className="admin-form-row three">
-                  <label>Bedrooms<input type="number" min="0" value={form.beds} onChange={(e) => update("beds", e.target.value)} /></label>
-                  <label>Bathrooms<input type="number" min="0" value={form.baths} onChange={(e) => update("baths", e.target.value)} /></label>
-                  <label>Area<input value={form.area} onChange={(e) => update("area", e.target.value)} placeholder="1,250 sq ft" /></label>
-                </div>
-                <label>Price<input value={form.price} onChange={(e) => update("price", e.target.value)} placeholder="Rs. 85,000" required /></label>
-                <div className="admin-upload-field">
-                  <span className="admin-upload-label">Property Image</span>
-                  <input
-                    ref={imageInputRef}
-                    className="admin-file-input"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                    onChange={handleImageUpload}
-                    aria-label="Upload property image"
-                  />
-                  <button type="button" className="gold-button admin-upload-button" onClick={() => imageInputRef.current?.click()}>
-                    <ImagePlus size={18} /> Upload Property Image
-                  </button>
-                  <span className="admin-upload-hint">JPG, JPEG, PNG or WEBP, up to 5 MB</span>
-                  {imageError && <span className="admin-image-error" role="alert">{imageError}</span>}
-                </div>
-                {imagePreview && (
-                  <div className="admin-image-preview">
-                    <img src={imagePreview} alt="Selected property preview" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    <div className="admin-image-details">
-                      <span><ImagePlus size={16} /> {imageName || "Current property image"}</span>
-                      <button type="button" className="admin-remove-image" onClick={() => { update("image", ""); setImageName(""); setImageError(""); }}>Remove Image</button>
-                    </div>
-                  </div>
-                )}
-                <button type="submit" className="gold-button admin-save"><Save size={18} /> {isEditing ? "Update Property" : "Publish Property"}</button>
-              </form>
-            </section>
-
-            <section className="admin-list-card">
-              <div className="admin-card-heading">
-                <div><h2>Properties</h2><p>{properties.length} listing{properties.length === 1 ? "" : "s"} in the current catalog.</p></div>
-              </div>
-              <div className="admin-property-list">
-                {properties.map((property) => (
-                  <article className="admin-property-row" key={property.id || property.title}>
-                    <img src={property.image} alt="" />
-                    <div className="admin-property-info"><strong>{property.title}</strong><span>{property.location} · {property.price}</span><small>{property.type} · {property.purpose}</small></div>
-                    <div className="admin-property-actions">
-                      <button className="icon-button" onClick={() => onEdit(property)} aria-label={`Edit ${property.title}`}><Edit3 size={17} /></button>
-                      <button className="icon-button danger" onClick={() => onDelete(property.id)} aria-label={`Delete ${property.title}`}><Trash2 size={17} /></button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+      setImageFile(file);
+      if (file) setImageUrl(URL.createObjectURL(file));
+    }} /></label>
+    {imageError && <p className="form-error" role="alert">{imageError}</p>}
+    {imageFile && <span className="placeholder-label">Selected image: {imageFile.name}</span>}
+    <button className="button button-dark" type="submit" disabled={saving}>{saving ? "Saving…" : "Save website settings"} <Save size={15} /></button>
+  </form>;
 }
-
-export default AdminPage;
-*/
