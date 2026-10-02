@@ -1,5 +1,5 @@
 {
-  "name": "rent-apartment-website",
+  "name": "colora-paints-website",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
+    "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.48.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

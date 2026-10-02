@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#20418B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1B8ECC;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="64" height="64" rx="12" fill="#f7f8fc"/>
+  
+  <!-- Logo Symbol: Stylized "A" with flowing paint ribbon -->
+  <g transform="translate(8, 6)">
+    <!-- Left diagonal stroke of A -->
+    <path d="M 8 42 Q 11 28, 14 14 Q 14.5 10, 15 10 Q 15.5 10, 16 14 Q 19 28, 22 42" 
+          stroke="url(#iconGradient)" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Right diagonal stroke of A -->
+    <path d="M 22 42 Q 25 28, 28 14 Q 28.5 10, 29 10 Q 29.5 10, 30 14 Q 33 28, 36 42" 
+          stroke="url(#iconGradient)" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Horizontal crossbar of A -->
+    <path d="M 11 30 Q 13.5 27, 22 27 Q 27 27, 33 30" 
+          stroke="url(#iconGradient)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Paint drop accent (lower right) -->
+    <ellipse cx="32" cy="40" rx="2" ry="3" fill="#B77C36" opacity="0.9"/>
+    <ellipse cx="37" cy="37" rx="1.2" ry="1.8" fill="#316E5D" opacity="0.8"/>
+  </g>
+</svg>
