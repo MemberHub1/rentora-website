@@ -110,14 +110,14 @@ export default function HomePage() {
   const displayCategories = categoryQuery.status === "preview" ? categories : categoryQuery.data;
   const featuredColor = paintColors.find((color) => color.id === "sage-leaf") ?? paintColors[0];
   return <>
-    <Seo title="Premium paints for considered living" description="Explore thoughtful paint collections and lasting color by COLORA PAINTS. Find your shade, estimate your paint and request a project quote." image={settings.heroImage || undefined} />
+    <Seo title="Quality paints for every space" description="ANSARI PAINTS — Quality paints, colors and coatings for homes, businesses and projects." image={settings.heroImage || undefined} />
     <main>
       <section className="hero container">
         <div className="hero-copy">
-          <span className="eyebrow"><span className="eyebrow-line" /> COLOR, CONSIDERED</span>
-          <h1>Transform Your Space With the <em>Perfect Color</em></h1>
-          <p>Premium paints designed to bring lasting beauty, protection and personality to every space.</p>
-          <div className="hero-actions"><Button to="/colors">Explore colors <ArrowRight size={16} /></Button><Button to="/contact" variant="outline">Get a quote <ArrowUpRight size={15} /></Button></div>
+          <span className="eyebrow"><span className="eyebrow-line" /> PREMIUM QUALITY PAINTS</span>
+          <h1>Colors That Bring Life to <em>Every Space</em></h1>
+          <p>High-quality paints and coatings for homes, businesses and projects.</p>
+          <div className="hero-actions"><Button to="/colors">Explore Colors <ArrowRight size={16} /></Button><Button to="/products" variant="outline">View Products <ArrowUpRight size={15} /></Button></div>
           <div className="hero-footnote"><span className="hero-dots"><i /><i /><i /></span> Find the shade that feels like you</div>
         </div>
         <div className="hero-image">
@@ -125,12 +125,12 @@ export default function HomePage() {
           <div className="hero-image-tag"><span className="tag-dot" /><span><strong>Sunday linen</strong><small>A softer kind of white</small></span><span className="tag-swatch" /></div>
           <span className="hero-image-index">01 / 04</span>
         </div>
-        <a className="hero-scroll" href="#collections"><ArrowDown size={14} /> DISCOVER COLORA</a>
+        <a className="hero-scroll" href="#collections"><ArrowDown size={14} /> DISCOVER ANSARI</a>
       </section>
 
       <section className="collection-section section-pad" id="collections">
         <div className="container">
-          <div className="section-heading-row"><SectionHeader eyebrow="THE COLORA EDIT" title="Good paint, for every room." description="The right finish makes a room feel like yours. Start with a collection made for the way you live." /><Link className="text-link" to="/products">Explore all paints <ArrowRight size={15} /></Link></div>
+          <div className="section-heading-row"><SectionHeader eyebrow="ANSARI PAINTS" title="Good paint, for every room." description="The right finish makes a room feel like yours. Start with a collection made for the way you live." /><Link className="text-link" to="/products">Explore all paints <ArrowRight size={15} /></Link></div>
           {categoryQuery.status === "error" && <div className="public-data-warning" role="alert">Paint collections could not be refreshed. Showing the starter collection. {categoryQuery.error}</div>}
           <div className="category-grid">{displayCategories.slice(0, 4).map((category, index) => <Link className={`category-card category-card-${index + 1}`} key={category.id} to={`/products?category=${category.id}`}>
             <img src={category.image} alt={`${category.shortName} paint inspiration`} loading="lazy" />
@@ -154,7 +154,7 @@ export default function HomePage() {
         </div>
       </section>}
 
-      <section className="why-section section-pad"><div className="container"><SectionHeader eyebrow="THE COLORA DIFFERENCE" title="A little more care in every coat." description="It’s the details that make a finish feel just right — considered from the very first brushstroke." align="center" /><div className="feature-grid">{sellingPoints.map(({ title, text, icon: Icon }, index) => <article className="feature-card" key={title}><span className="feature-index">0{index + 1}</span><span className="feature-icon"><Icon size={20} strokeWidth={1.6} /></span><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
+      <section className="why-section section-pad"><div className="container"><SectionHeader eyebrow="THE ANSARI DIFFERENCE" title="A little more care in every coat." description="It’s the details that make a finish feel just right — considered from the very first brushstroke." align="center" /><div className="feature-grid">{sellingPoints.map(({ title, text, icon: Icon }, index) => <article className="feature-card" key={title}><span className="feature-index">0{index + 1}</span><span className="feature-icon"><Icon size={20} strokeWidth={1.6} /></span><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
 
       <section className="calculator-preview-section section-pad"><div className="container calculator-preview-grid"><div className="calculator-preview-copy"><span className="eyebrow">A GOOD PLACE TO START</span><h2>How much paint<br />do you <em>need?</em></h2><p>Take the guesswork out of your next project. A few room measurements give you a useful starting estimate.</p><span className="calculator-tip"><span>01</span> Measure your room <span>02</span> Pick your coats <span>03</span> Get an estimate</span></div><PaintCalculator compact /></div></section>
 

@@ -1,4 +1,4 @@
-# COLORA PAINTS
+# ANSARI PAINTS
 
 Responsive paint-company website built with React, Vite, React Router, Tailwind CSS, Lucide and Supabase.
 
@@ -13,7 +13,8 @@ The publishable/anon key is expected to be public. Never put a Supabase service-
 
 ## Supabase project setup
 
-1. Run [`supabase/colora_schema.sql`](./supabase/colora_schema.sql) in the Supabase SQL editor. It creates/upgrades the COLORA tables, seeds the starter catalog/settings, applies row-level security and creates the image bucket/policies. Run it separately from the retained legacy schema.
+1. Run [`supabase/colora_schema.sql`](./supabase/colora_schema.sql) in the Supabase SQL editor. It creates/upgrades the ANSARI PAINTS tables, seeds the starter catalog/settings, applies row-level security and creates the image bucket/policies. Run it separately from the retained legacy schema.
+   The script also adds the unique enquiry receipt number field. Re-run the updated script in an existing ANSARI PAINTS project to apply that schema update and retain existing enquiries.
 2. In Supabase Auth, create an administrator using the dashboard or a trusted server-side invite process. Public sign-up is not implemented in this frontend. Do not add credentials to source control.
 3. Copy that Auth user’s UUID and add it to the allow-list from the SQL editor:
 
@@ -31,6 +32,8 @@ The publishable/anon key is expected to be public. Never put a Supabase service-
 The UI uses the async adapter in `src/lib/catalogRepository.js`; database rows are mapped to the existing camel-case UI records there. Product, color, category and article reads filter to `published = true`; admin loads include drafts only after authenticated allow-list verification. Enquiries are insertable by the public form and readable/updatable/deletable only by authorized admins. Site settings are publicly readable and admin-managed. Images are uploaded to `website-images` and only their URLs are stored in table rows.
 
 Admin sign-in uses Supabase email/password Auth. No sign-up, automatic admin provisioning, passwords or service-role credentials are present in the browser code. In addition to UI authorization, RLS and table privileges enforce access. The schema grants anonymous users only the public reads and limited enquiry insert fields; all content mutation policies require an Auth user in `public.admin_users`.
+
+The public contact form writes enquiries and their unique receipt numbers to Supabase before showing its success receipt. Customers can open a pre-filled `wa.me` receipt message when an administrator has configured the business WhatsApp number under Admin → Website settings. The WhatsApp number is stored in `site_settings`; no WhatsApp API integration is used.
 
 ## Routes
 

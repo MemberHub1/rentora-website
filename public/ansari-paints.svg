@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">
+  <defs>
+    <linearGradient id="paintGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#20418B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1B8ECC;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Logo Symbol: Stylized "A" with flowing paint ribbon -->
+  <g>
+    <!-- Left diagonal stroke of A -->
+    <path d="M 20 65 Q 25 45, 30 25 Q 31 20, 32 20 Q 33 20, 34 25 Q 39 45, 44 65" 
+          stroke="url(#paintGradient)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Right diagonal stroke of A -->
+    <path d="M 44 65 Q 48 45, 52 25 Q 53 20, 54 20 Q 55 20, 56 25 Q 61 45, 66 65" 
+          stroke="url(#paintGradient)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Horizontal crossbar of A -->
+    <path d="M 28 48 Q 32 44, 44 44 Q 52 44, 58 48" 
+          stroke="url(#paintGradient)" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Paint drop accent (lower right) -->
+    <ellipse cx="62" cy="72" rx="3.5" ry="5" fill="#B77C36" opacity="0.9"/>
+    <ellipse cx="68" cy="68" rx="2" ry="3" fill="#316E5D" opacity="0.8"/>
+  </g>
+  
+  <!-- Company Name: ANSARI -->
+  <text x="90" y="58" font-family="Arial, sans-serif" font-size="48" font-weight="700" 
+        fill="#20418B" letter-spacing="-0.5">ANSARI</text>
+  
+  <!-- Tagline: PAINTS -->
+  <text x="90" y="73" font-family="Arial, sans-serif" font-size="18" font-weight="300" 
+        fill="#1B8ECC" letter-spacing="2">PAINTS</text>
+</svg>

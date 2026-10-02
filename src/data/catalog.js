@@ -43,10 +43,10 @@ export const colors = [
 export const familyNames = ["All colors", "White", "Cream", "Grey", "Blue", "Green", "Yellow", "Brown", "Pink", "Red"];
 
 export const defaultSettings = {
-  companyName: "COLORA PAINTS",
-  email: "hello@colorapaints.example",
+  companyName: "ANSARI PAINTS",
+  email: "hello@ansaripaints.example",
   phone: "+1 (555) 010-2026",
-  whatsapp: "+1 (555) 010-2026",
+  whatsapp: "",
   facebookUrl: "",
   instagramUrl: "",
   tiktokUrl: "",

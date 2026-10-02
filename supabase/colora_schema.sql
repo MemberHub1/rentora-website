@@ -1,4 +1,4 @@
--- COLORA PAINTS schema. Run once in Supabase SQL Editor, separately from the legacy schema.
+-- ANSARI PAINTS schema. Run once in Supabase SQL Editor, separately from the legacy schema.
 -- Create Auth users through the Supabase dashboard, then add their UUID to public.admin_users.
 
 create schema if not exists private;
@@ -73,6 +73,7 @@ create table if not exists public.colors (
 
 create table if not exists public.enquiries (
   id uuid primary key default gen_random_uuid(),
+  receipt_number text,
   name text not null,
   phone text not null,
   email text,
@@ -97,7 +98,7 @@ create table if not exists public.articles (
 
 create table if not exists public.site_settings (
   id boolean primary key default true check (id),
-  company_name text not null default 'COLORA PAINTS',
+  company_name text not null default 'ANSARI PAINTS',
   email text not null default '',
   phone text not null default '',
   address text not null default '',
@@ -116,12 +117,18 @@ create table if not exists public.site_settings (
 );
 
 alter table public.colors add column if not exists image_url text not null default '';
-alter table public.site_settings add column if not exists company_name text not null default 'COLORA PAINTS';
+alter table public.site_settings add column if not exists company_name text not null default 'ANSARI PAINTS';
 alter table public.site_settings add column if not exists whatsapp text not null default '';
 alter table public.site_settings add column if not exists facebook_url text not null default '';
 alter table public.site_settings add column if not exists instagram_url text not null default '';
 alter table public.site_settings add column if not exists tiktok_url text not null default '';
 alter table public.site_settings add column if not exists hero_image_url text not null default '';
+alter table public.enquiries add column if not exists receipt_number text;
+update public.enquiries
+set receipt_number = 'ENQ-' || id::text
+where receipt_number is null;
+alter table public.enquiries alter column receipt_number set not null;
+create unique index if not exists enquiries_receipt_number_key on public.enquiries (receipt_number);
 alter table public.enquiries drop constraint if exists enquiries_status_check;
 alter table public.enquiries add constraint enquiries_status_check check (status in ('new', 'read', 'in_progress', 'closed'));
 
@@ -193,7 +200,7 @@ revoke all on public.categories, public.products, public.colors, public.enquirie
 grant select on public.categories, public.products, public.colors, public.articles, public.site_settings to anon, authenticated;
 grant insert, update, delete on public.categories, public.products, public.colors, public.articles, public.site_settings to authenticated;
 grant select on public.enquiries to authenticated;
-grant insert (name, phone, email, city, interest, message) on public.enquiries to anon, authenticated;
+grant insert (receipt_number, name, phone, email, city, interest, message) on public.enquiries to anon, authenticated;
 grant update, delete on public.enquiries to authenticated;
 
 -- Public image reads, with upload/update/delete restricted to authorized admins.
@@ -202,18 +209,18 @@ values ('website-images', 'website-images', true, 8388608, array['image/jpeg', '
 on conflict (id) do update set public = true, file_size_limit = 8388608,
   allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
-drop policy if exists "Public can view COLORA website images" on storage.objects;
-create policy "Public can view COLORA website images" on storage.objects
+drop policy if exists "Public can view ANSARI website images" on storage.objects;
+create policy "Public can view ANSARI website images" on storage.objects
   for select to anon, authenticated using (bucket_id = 'website-images');
-drop policy if exists "COLORA admins upload website images" on storage.objects;
-create policy "COLORA admins upload website images" on storage.objects
+drop policy if exists "ANSARI admins upload website images" on storage.objects;
+create policy "ANSARI admins upload website images" on storage.objects
   for insert to authenticated with check (bucket_id = 'website-images' and (select private.is_colora_admin()));
-drop policy if exists "COLORA admins update website images" on storage.objects;
-create policy "COLORA admins update website images" on storage.objects
+drop policy if exists "ANSARI admins update website images" on storage.objects;
+create policy "ANSARI admins update website images" on storage.objects
   for update to authenticated using (bucket_id = 'website-images' and (select private.is_colora_admin()))
   with check (bucket_id = 'website-images' and (select private.is_colora_admin()));
-drop policy if exists "COLORA admins delete website images" on storage.objects;
-create policy "COLORA admins delete website images" on storage.objects
+drop policy if exists "ANSARI admins delete website images" on storage.objects;
+create policy "ANSARI admins delete website images" on storage.objects
   for delete to authenticated using (bucket_id = 'website-images' and (select private.is_colora_admin()));
 
 insert into public.categories (id, name, short_name, description, image_url, published)
@@ -259,5 +266,5 @@ values
 on conflict (id) do nothing;
 
 insert into public.site_settings (id,company_name,tagline,email,phone,address,whatsapp,hours,years_experience,happy_customers,product_range,cities_served)
-values (true,'COLORA PAINTS','Colors That Bring Life to Your Space','hello@colorapaints.example','+1 (555) 010-2026','123 Studio Lane, Your City (placeholder address)','+1 (555) 010-2026','Monday–Friday, 8:30 am–5:30 pm','12+','5,000+','350+','40+')
+values (true,'ANSARI PAINTS','Colors That Bring Life to Every Space','hello@ansaripaints.example','+1 (555) 010-2026','123 Studio Lane, Your City (placeholder address)','','Monday–Friday, 8:30 am–5:30 pm','12+','5,000+','350+','40+')
 on conflict (id) do nothing;

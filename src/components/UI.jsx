@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ArrowRight, Check, PaintBucket } from "lucide-react";
+import { ArrowRight, Check, MessageCircle, PaintBucket } from "lucide-react";
 import { Link } from "react-router-dom";
 import { categories } from "../data/catalog";
 import { catalogRepository } from "../lib/catalogRepository";
+import { createEnquiryReceiptNumber, createWhatsAppReceiptUrl } from "../lib/enquiryReceipt";
 
 export function Button({ children, to, variant = "dark", className = "", ...props }) {
   const classes = `button button-${variant} ${className}`.trim();
@@ -100,8 +101,8 @@ export function PaintCalculator({ compact = false }) {
   </div>;
 }
 
-export function QuoteForm({ compact = false }) {
-  const [submitted, setSubmitted] = useState(false);
+export function QuoteForm({ compact = false, whatsappNumber = "" }) {
+  const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submit = async (event) => {
@@ -110,10 +111,10 @@ export function QuoteForm({ compact = false }) {
     const data = Object.fromEntries(new FormData(event.currentTarget));
     setSubmitting(true);
     try {
-      await catalogRepository.createEnquiry(data);
+      const receiptNumber = createEnquiryReceiptNumber();
+      await catalogRepository.createEnquiry(data, receiptNumber);
       setError("");
-      setSubmitted(true);
-      event.currentTarget.reset();
+      setReceipt({ ...data, receiptNumber });
     } catch (submissionError) {
       console.error("Unable to submit enquiry.", submissionError);
       setError(submissionError instanceof Error ? submissionError.message : "We couldn’t submit your enquiry. Please try again.");
@@ -122,7 +123,30 @@ export function QuoteForm({ compact = false }) {
     }
   };
 
-  if (submitted) return <div className="success-state" role="status"><span className="success-icon"><Check size={22} /></span><div><h3>Thanks for getting in touch.</h3><p>Your enquiry has been received. Our team will be in touch.</p><button className="text-link" onClick={() => setSubmitted(false)} type="button">Send another enquiry <ArrowRight size={15} /></button></div></div>;
+  if (receipt) {
+    const whatsappUrl = createWhatsAppReceiptUrl(whatsappNumber, receipt);
+    return <section className="success-state enquiry-receipt" aria-labelledby="enquiry-receipt-title" role="status">
+      <span className="success-icon"><Check size={22} /></span>
+      <div className="enquiry-receipt-content">
+        <span className="eyebrow">ENQUIRY RECEIVED · NEW</span>
+        <h3 id="enquiry-receipt-title">Thank you, {receipt.name}.</h3>
+        <p>Your enquiry is saved with ANSARI PAINTS. Keep this receipt number for your records.</p>
+        <div className="receipt-number"><span>RECEIPT NUMBER</span><strong>{receipt.receiptNumber}</strong></div>
+        <dl className="receipt-details">
+          <div><dt>Phone</dt><dd>{receipt.phone}</dd></div>
+          <div><dt>Email</dt><dd>{receipt.email || "Not provided"}</dd></div>
+          <div><dt>City</dt><dd>{receipt.city || "Not provided"}</dd></div>
+          <div><dt>Product / project</dt><dd>{receipt.interest || "Not specified"}</dd></div>
+          <div className="receipt-message"><dt>Your message</dt><dd>{receipt.message}</dd></div>
+          <div><dt>Status</dt><dd>NEW</dd></div>
+        </dl>
+        {whatsappUrl
+          ? <a className="button button-dark receipt-whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer"><MessageCircle size={16} /> Send receipt on WhatsApp</a>
+          : <p className="form-note">WhatsApp receipt delivery is unavailable until the business WhatsApp number is configured.</p>}
+        <button className="text-link" onClick={() => setReceipt(null)} type="button">Send another enquiry <ArrowRight size={15} /></button>
+      </div>
+    </section>;
+  }
 
   return <form className={`quote-form ${compact ? "quote-form-compact" : ""}`} onSubmit={submit}>
     <div className="form-row"><label>Your name<input name="name" autoComplete="name" placeholder="Name" required /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" placeholder="+1 555 000 0000" required /></label></div>

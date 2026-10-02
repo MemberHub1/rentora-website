@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { ArrowUpRight, Camera, MessageCircle, Music2, AtSign, Menu, X } from "lucide-react";
+import { ArrowUpRight, Share2, AtSign, MessageCircle, Music2, Menu, Search, ShoppingBag, X } from "lucide-react";
 import { catalogRepository } from "../lib/catalogRepository";
 import { categories as sampleCategories, defaultSettings } from "../data/catalog";
 import { useCatalogCollection } from "../hooks/useCatalogCollection";
 
 const navItems = [
-  { to: "/", label: "Home" },
+  { to: "/about", label: "Our Company" },
   { to: "/products", label: "Products" },
   { to: "/colors", label: "Colors" },
-  { to: "/calculator", label: "Calculator" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
+  { to: "/calculator", label: "Resources" },
+  { to: "/contact", label: "Find a Store" },
+  { to: "/contact", label: "Contact Us" },
 ];
 
 export function Seo({ title, description, image = "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&h=630&q=85" }) {
   useEffect(() => {
-    document.title = `${title} | COLORA PAINTS`;
+    document.title = `${title} | ANSARI PAINTS`;
     const ensureMeta = (selector, attributes, content) => {
       let element = document.querySelector(selector);
       if (!element) {
@@ -27,7 +27,7 @@ export function Seo({ title, description, image = "https://images.unsplash.com/p
       element.setAttribute("content", content);
     };
     ensureMeta('meta[name="description"]', { name: "description" }, description);
-    ensureMeta('meta[property="og:title"]', { property: "og:title" }, `${title} | COLORA PAINTS`);
+    ensureMeta('meta[property="og:title"]', { property: "og:title" }, `${title} | ANSARI PAINTS`);
     ensureMeta('meta[property="og:description"]', { property: "og:description" }, description);
     ensureMeta('meta[property="og:type"]', { property: "og:type" }, "website");
     ensureMeta('meta[property="og:url"]', { property: "og:url" }, window.location.href);
@@ -70,20 +70,20 @@ export default function SiteLayout() {
       {!catalogRepository.isConfigured && <div className="preview-state site-preview-state" role="status">Preview mode · Public catalog is sample data. Configure Supabase to show live content and accept enquiries.</div>}
       <header className="site-header">
         <div className="header-inner container">
-          <Link className="brand" to="/" aria-label="COLORA PAINTS home" onClick={closeMenu}>
-            <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
-            <span className="brand-word">{settings.companyName || "COLORA PAINTS"}</span>
+          <Link className="brand" to="/" aria-label="ANSARI PAINTS home" onClick={closeMenu}>
+            <img className="brand-logo" src="/ansari-paints.svg" alt="ANSARI PAINTS" />
           </Link>
           <button className="menu-toggle icon-button" type="button" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
           </button>
           <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Main navigation">
             {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.to === "/"} onClick={closeMenu} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink key={item.label} to={item.to} end={item.to === "/"} onClick={closeMenu} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
                 {item.label}
               </NavLink>
             ))}
-            <Link className="button button-dark nav-quote" to="/contact" onClick={closeMenu}>Get a Quote <ArrowUpRight size={15} /></Link>
+            <Link className="header-icon" to="/products" aria-label="Search products" title="Search products" onClick={closeMenu}><Search size={18} /></Link>
+            <button className="header-icon cart-button" type="button" aria-label="Cart (online ordering coming soon)" title="Online ordering coming soon" disabled><ShoppingBag size={18} /></button>
           </nav>
         </div>
       </header>
@@ -102,24 +102,23 @@ function Footer({ settings, categories, categoriesError }) {
         <div className="footer-main">
           <div className="footer-brand-block">
             <Link className="brand brand-light" to="/">
-              <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
-              <span className="brand-word">{settings.companyName || "COLORA PAINTS"}</span>
+              <img className="brand-logo" src="/ansari-paints.svg" alt="ANSARI PAINTS" />
             </Link>
             <p>{settings.tagline}</p>
             <div className="footer-social-links" aria-label="Social media links">
-              {settings.facebookUrl && <a className="footer-social" href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook"><AtSign size={15} /></a>}
-              {settings.instagramUrl && <a className="footer-social" href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><Camera size={15} /></a>}
+              {settings.facebookUrl && <a className="footer-social" href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook"><Share2 size={15} /></a>}
+              {settings.instagramUrl && <a className="footer-social" href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><AtSign size={15} /></a>}
               {settings.tiktokUrl && <a className="footer-social" href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok"><Music2 size={15} /></a>}
               <a className="footer-social" href={`https://wa.me/${(settings.whatsapp || settings.phone).replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="WhatsApp"><MessageCircle size={15} /></a>
             </div>
-            <span className="placeholder-label">{settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl ? `Follow ${settings.companyName || "COLORA PAINTS"}` : "Social profile links are not configured"}</span>
+            <span className="placeholder-label">{settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl ? "Follow ANSARI PAINTS" : "Social profile links are not configured"}</span>
           </div>
           <div className="footer-column"><h3>Explore</h3>{navItems.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}</div>
           <div className="footer-column"><h3>Our collections</h3>{categoriesError ? <span className="placeholder-label">Collections are temporarily unavailable.</span> : categories.slice(0, 5).map((category) => <Link key={category.id} to={`/products?category=${category.id}`}>{category.shortName} paint</Link>)}</div>
           <div className="footer-column footer-contact"><h3>Come say hello</h3><a href={`mailto:${settings.email}`}>{settings.email}</a><a href={`tel:${settings.phone.replace(/[^\d+]/g, "")}`}>{settings.phone}</a><p>{settings.address}</p><p>{settings.hours}</p><span className="placeholder-label">Contact details are placeholders</span></div>
         </div>
         <div className="footer-bottom">
-          <span>© {settings.companyName || "COLORA PAINTS"}. Made for a more colorful everyday.</span>
+          <span>© ANSARI PAINTS. Colors That Bring Life to Every Space.</span>
           <div><Link to="/privacy-policy">Privacy policy</Link><Link to="/terms">Terms &amp; conditions</Link><Link to="/admin">Admin</Link></div>
         </div>
       </div>

@@ -47,7 +47,7 @@ const mapArticle = (row) => ({
 });
 
 const mapSettings = (row) => ({
-  companyName: row.company_name,
+  companyName: row.company_name?.trim().toUpperCase() === "COLORA PAINTS" ? "ANSARI PAINTS" : row.company_name,
   tagline: row.tagline,
   email: row.email,
   phone: row.phone,
@@ -137,16 +137,19 @@ export const catalogRepository = {
     const client = requireSupabase();
     return unwrap(await client.from("enquiries").update({ status: read ? "read" : "new" }).eq("id", id).select().single(), "update enquiry status");
   },
-  async createEnquiry(enquiry) {
+  async createEnquiry(enquiry, receiptNumber) {
     const client = requireSupabase();
-    return unwrap(await client.from("enquiries").insert({
+    unwrap(await client.from("enquiries").insert({
+      receipt_number: receiptNumber,
       name: enquiry.name.trim(),
       phone: enquiry.phone.trim(),
       email: enquiry.email?.trim() || null,
       city: enquiry.city?.trim() || null,
       interest: enquiry.interest?.trim() || null,
       message: enquiry.message.trim(),
+      status: "new",
     }), "submit enquiry");
+    return { receiptNumber };
   },
   async getSettings() {
     if (!isSupabaseConfigured) return defaultSettings;
