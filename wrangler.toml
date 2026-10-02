@@ -7,7 +7,4 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-[build]
-command = "npm run build"
-
 [previews]
