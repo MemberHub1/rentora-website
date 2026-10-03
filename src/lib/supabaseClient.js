@@ -7,4 +7,15 @@ export const supabase = supabaseUrl && supabasePublishableKey
   ? createClient(supabaseUrl, supabasePublishableKey)
   : null;
 
+export const publicSupabase = supabaseUrl && supabasePublishableKey
+  ? createClient(supabaseUrl, supabasePublishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+      storageKey: "ansari-paints-public-client",
+    },
+  })
+  : null;
+
 export const isSupabaseConfigured = Boolean(supabase);
