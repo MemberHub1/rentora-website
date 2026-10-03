@@ -13,6 +13,7 @@ export const publicSupabase = supabaseUrl && supabasePublishableKey
       autoRefreshToken: false,
       detectSessionInUrl: false,
       persistSession: false,
+      storageKey: "ansari-paints-public-client",
     },
   })
   : null;
