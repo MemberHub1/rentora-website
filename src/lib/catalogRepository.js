@@ -1,5 +1,5 @@
 import { colors as sampleColors, defaultSettings, products as sampleProducts, categories as sampleCategories, initialArticles } from "../data/catalog";
-import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { isSupabaseConfigured, publicSupabase, supabase } from "./supabaseClient";
 
 const storageBucket = "website-images";
 
@@ -138,7 +138,8 @@ export const catalogRepository = {
     return unwrap(await client.from("enquiries").update({ status: read ? "read" : "new" }).eq("id", id).select().single(), "update enquiry status");
   },
   async createEnquiry(enquiry, receiptNumber) {
-    const client = requireSupabase();
+    if (!publicSupabase) throw new Error("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
+    const client = publicSupabase;
     unwrap(await client.from("enquiries").insert({
       receipt_number: receiptNumber,
       name: enquiry.name.trim(),
