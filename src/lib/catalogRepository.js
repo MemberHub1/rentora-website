@@ -139,7 +139,9 @@ export const catalogRepository = {
   },
   async createEnquiry(enquiry, receiptNumber) {
     const client = requireSupabase();
-    unwrap(await client.from("enquiries").insert({
+    // Perform an insert without returning the inserted row to avoid requiring anon SELECT permission.
+    // Use { returning: 'minimal' } so the server does not attempt to return the row data.
+    const result = await client.from("enquiries").insert({
       receipt_number: receiptNumber,
       name: enquiry.name.trim(),
       phone: enquiry.phone.trim(),
@@ -148,9 +150,11 @@ export const catalogRepository = {
       interest: enquiry.interest?.trim() || null,
       message: enquiry.message.trim(),
       status: "new",
-    }), "submit enquiry");
+    }, { returning: "minimal" });
+    unwrap(result, "submit enquiry");
     return { receiptNumber };
   },
+
   async getSettings() {
     if (!isSupabaseConfigured) return defaultSettings;
     const client = requireSupabase();
